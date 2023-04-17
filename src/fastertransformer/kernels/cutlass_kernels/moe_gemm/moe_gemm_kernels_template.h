@@ -190,7 +190,9 @@ void generic_moe_gemm_kernelLauncher(const T*          A,
         throw std::runtime_error("[FT Error][MoE Runner] " + err_msg);
     }
 
+    FT_LOG_TRACE("==== milestone 1024");
     auto run_status = gemm.run(stream);
+    FT_LOG_TRACE("==== milestone 2048");
     if (run_status != cutlass::Status::kSuccess) {
         std::string err_msg =
             "Failed to run cutlass variable batched gemm. Error: " + std::string(cutlassGetStatusString(run_status));

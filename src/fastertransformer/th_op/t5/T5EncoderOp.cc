@@ -206,7 +206,7 @@ void FTT5Encoder<T>::forward(size_t                   batch_size,
                              th::Tensor&              output,
                              bool                     removing_padding)
 {
-    FT_LOG_DEBUG(__PRETTY_FUNCTION__);
+    FT_LOG_ERROR(__PRETTY_FUNCTION__);
     auto           stream        = at::cuda::getCurrentCUDAStream().stream();
     cublasHandle_t _cublasHandle = at::cuda::getCurrentCUDABlasHandle();
     cublasSetStream(_cublasHandle, stream);
@@ -396,6 +396,7 @@ FasterTransformerT5Encoder::FasterTransformerT5Encoder(th::Tensor           attr
             after_ffn_adapter_layernorm_gamma,
             after_ffn_adapter_layernorm_beta}
 {
+    fastertransformer::Logger::getLogger().setLevel(fastertransformer::Logger::Level::TRACE);
     CHECK_INPUT(q_kernel, _st);                                 // d_model, hidden_dim
     CHECK_INPUT(k_kernel, _st);                                 // d_model, hidden_dim
     CHECK_INPUT(v_kernel, _st);                                 // d_model, hidden_dim
@@ -510,6 +511,8 @@ th::Tensor FasterTransformerT5Encoder::forward(th::optional<th::Tensor> input_id
                                                th::Tensor               sequence_lengths,
                                                th::optional<th::Tensor> inputs_embeds)
 {
+    FT_LOG_DEBUG("FasterTransformerT5Encoder::forward");
+
     if (input_ids.has_value()) {
         CHECK_CONTIGUOUS(input_ids.value());
         TORCH_CHECK(input_ids.value().dtype() == torch::kInt32, "input_ids dtype should be int32");

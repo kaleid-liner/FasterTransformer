@@ -92,6 +92,8 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
     if (use_moe) {
         PUSH_RANGE("FFN moe");
         FT_CHECK(ia3_tasks == nullptr);
+        FT_LOG_TRACE("=== milestones 100");
+
         cublas_wrapper_->Gemm(CUBLAS_OP_N,
                               CUBLAS_OP_N,
                               expert_num_,
@@ -103,8 +105,10 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
                               hidden_units_,
                               moe_gates_buf_,
                               expert_num_);
+        FT_LOG_TRACE("=== milestones 101 === %d", int8_mode_);
 
         if (int8_mode_ == 0) {
+            FT_LOG_TRACE("=== milestones 101.5");
             moe_fc_runner_->run_moe_fc(input_tensor,
                                        moe_gates_buf_,
                                        ffn_weights->intermediate_weight.kernel,
@@ -124,8 +128,10 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
                                        permuted_rows,
                                        permuted_experts,
                                        stream_);
+            FT_LOG_TRACE("=== milestones 102");
         }
         else if (int8_mode_ == 1) {
+            FT_LOG_TRACE("=== milestones 103");
             FT_CHECK_WITH_INFO(moe_int8_weight_only_fc_runner_.get() != NULL,
                                "weight only runner was not initialized.");
 
@@ -159,6 +165,7 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
         else {
             FT_CHECK_WITH_INFO(false, "Invalid int8 mode for MoE");
         }
+        FT_LOG_TRACE("=== milestones 104");
 
         sync_check_cuda_error();
         if (is_free_buffer_after_forward_ == true) {
@@ -196,6 +203,7 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
     }
     else {
         if (int8_mode_ == 1) {
+            FT_LOG_TRACE("=== milestones 105");
             FT_CHECK_WITH_INFO(weight_only_int8_fc_runner_.get() != NULL, "weight only runner was not initialized.");
             FT_CHECK(ffn_weights->intermediate_weight.int8_kernel != NULL
                      && ffn_weights->intermediate_weight.weight_only_quant_scale != NULL);
@@ -217,6 +225,7 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
                     stream_);
             }
             else {
+                FT_LOG_TRACE("=== milestones 106");
                 // Otherwise, let FT handle activation
                 weight_only_int8_fc_runner_->gemm(
                     input_tensor,
@@ -262,6 +271,7 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
                                       ffn_weights->intermediate_weight.scale_inter);
         }
         else {
+            FT_LOG_TRACE("=== milestones 107");
             cublas_wrapper_->Gemm(CUBLAS_OP_N,
                                   CUBLAS_OP_N,
                                   inter_size_,
@@ -309,6 +319,7 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
     }
 
     sync_check_cuda_error();
+    FT_LOG_TRACE("=== milestones 108");
 
     PUSH_RANGE("FFN gemm 2");
 #ifdef SPARSITY_ENABLED
@@ -328,6 +339,7 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
     }
     else {
         if (int8_mode_ == 1) {
+            FT_LOG_TRACE("=== milestones 109");
             FT_CHECK_WITH_INFO(weight_only_int8_fc_runner_.get() != NULL, "weight only runner was not initialized.");
             FT_CHECK(ffn_weights->output_weight.int8_kernel != NULL
                      && ffn_weights->output_weight.weight_only_quant_scale != NULL);
@@ -343,6 +355,7 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
                                               stream_);
         }
         else if (int8_mode_ == 2) {
+            FT_LOG_TRACE("=== milestones 110");
             int8_fc_runner_->gemm(reinterpret_cast<int8_t*>(inter_buf_),
                                   ffn_weights->output_weight.int8_kernel,
                                   QuantMode::PerTensorQuant,
@@ -357,6 +370,7 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
                                   stream_);
         }
         else {
+            FT_LOG_TRACE("=== milestones 111");
             cublas_wrapper_->Gemm(CUBLAS_OP_N,
                                   CUBLAS_OP_N,
                                   hidden_units_,

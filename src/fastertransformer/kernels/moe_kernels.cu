@@ -666,7 +666,10 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
         }
     }
 
+    FT_LOG_TRACE("=== milestone run_moe_fc 0 ===");
     configure_ws_ptrs(workspace_ptr, num_rows, hidden_size, inter_size, num_experts, k);
+
+    FT_LOG_TRACE("=== milestone run_moe_fc 1 ===");
     topk_gating_softmax_kernelLauncher<T>(gating_output,
                                           finished,
                                           expert_scales,
@@ -683,6 +686,7 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
     check_cuda_error(cudaGetLastError());
 #endif
 
+    FT_LOG_TRACE("=== milestone run_moe_fc 3 ===");
     const int sorter_ws_size_bytes = pad_to_multiple_of_16(sorter_.getWorkspaceSize(k * num_rows));
     sorter_.run((void*)fc1_result_,
                 sorter_ws_size_bytes,
@@ -698,6 +702,7 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
     check_cuda_error(cudaGetLastError());
 #endif
 
+    FT_LOG_TRACE("=== milestone run_moe_fc 4 ===");
     initialize_moe_routing_kernelLauncher(input_activations,
                                           permuted_data_,
                                           permuted_rows_,
@@ -707,6 +712,7 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
                                           hidden_size,
                                           k,
                                           stream);
+    FT_LOG_TRACE("=== milestone run_moe_fc 5 ===");
 
 #ifndef NDEBUG
     cudaDeviceSynchronize();
@@ -714,6 +720,7 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
 #endif
 
     const int expanded_active_expert_rows = k * active_rows;
+    FT_LOG_TRACE("=== milestone run_moe_fc 6 ===");
     compute_total_rows_before_expert(
         permuted_experts_, expanded_active_expert_rows, num_experts, total_rows_before_expert_, stream);
 
@@ -722,6 +729,7 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
     check_cuda_error(cudaGetLastError());
 #endif
 
+    FT_LOG_TRACE("=== milestone run_moe_fc 7 ===");
     moe_gemm_runner_.moe_gemm_bias_act(permuted_data_,
                                        fc1_expert_weights,
                                        fc1_scales,
@@ -740,6 +748,7 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
     check_cuda_error(cudaGetLastError());
 #endif
 
+    FT_LOG_TRACE("=== milestone run_moe_fc 8 ===");
     moe_gemm_runner_.moe_gemm(fc1_result_,
                               fc2_expert_weights,
                               fc2_scales,
@@ -750,6 +759,7 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
                               inter_size,
                               num_experts,
                               stream);
+    FT_LOG_TRACE("=== milestone run_moe_fc 9 ===");
 
 #ifndef NDEBUG
     cudaDeviceSynchronize();

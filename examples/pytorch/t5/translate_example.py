@@ -142,7 +142,7 @@ def translate(args_dict):
             if (ckpt_config.get('structure', 'moe_layers_in_encoder') != '[]'):
                 moe_layers_in_encoder = [int(n) for n in ckpt_config.get('structure', 'moe_layers_in_encoder')[1:-1].replace(" ", "").split(',')]
             if (ckpt_config.get('structure', 'moe_layers_in_decoder') != '[]'):
-                moe_layers_in_decoder = [int(n) for n in ckpt_config.get('structure', 'moe_layers_in_encoder')[1:-1].replace(" ", "").split(',')]
+                moe_layers_in_decoder = [int(n) for n in ckpt_config.get('structure', 'moe_layers_in_decoder')[1:-1].replace(" ", "").split(',')]
         else:
             raise Exception("config file does exist with the ckpt !")
 
@@ -250,7 +250,7 @@ def translate(args_dict):
                 f"{decoder_config.d_model} {decoder_config.num_heads} {decoder_config.d_kv} {decoder_config.d_ff} " \
                 f"{decoder_config.vocab_size} {data_type} {tensor_para_size} 0 > .tmp_gemm.log"
             LOGGER.info(f"Run gemm test: {cmd}")
-            os.system(cmd)
+            # os.system(cmd)
 
     if time_args.find("2") != -1:
         translation_result_list.append(TranslationResult("hf-sampling-warmup", "HF"))
@@ -290,8 +290,13 @@ def translate(args_dict):
         )
 
         if args_dict["ckpt_path"] is not None:
-            ft_encoder_weight.load_from_bin(args_dict["ckpt_path"], model_type, load_data_type)
-            ft_decoding_weight.load_from_bin(args_dict["ckpt_path"], model_type, load_data_type)
+            # 31 tensors placeholders is needed for encoder
+            # ft_encoder_weight.w = [torch.tensor(1, dtype=torch.float32).contiguous().cuda() for _ in range(31)]
+            ft_encoder_weight.random_weights_for_inference_test();
+            ft_decoding_weight.random_weights_for_inference_test();
+
+            # ft_encoder_weight.load_from_bin(args_dict["ckpt_path"], model_type)
+            # ft_decoding_weight.load_from_bin(args_dict["ckpt_path"], model_type)
         else:
             ft_encoder_weight.load_from_model(t5_model)
             ft_decoding_weight.load_from_model(t5_model)
@@ -312,7 +317,7 @@ def translate(args_dict):
                                 encoder_config.d_model, remove_padding, encoder_config.num_layers,
                                 encoder_config.relative_attention_num_buckets, encoder_config.num_experts, encoder_config.moe_layer_index,
                                 128, False, q_scaling, tensor_para_size, pipeline_para_size, t5_with_bias,
-                                position_embedding_type, moe_k=0,
+                                position_embedding_type, moe_k=1,
                                 activation_type=activation_type,)
         ft_decoding = FTT5Decoding(ft_decoding_weight.w, lib_path,
                                 decoder_config.num_heads, decoder_config.d_kv,
@@ -324,7 +329,7 @@ def translate(args_dict):
                                 decoder_config.relative_attention_num_buckets, decoder_config.num_experts, decoder_config.moe_layer_index, max_distance=128,
                                 tensor_para_size=tensor_para_size, pipeline_para_size=pipeline_para_size,
                                 t5_with_bias=t5_with_bias,
-                                position_embedding_type=position_embedding_type, moe_k=0,
+                                position_embedding_type=position_embedding_type, moe_k=1,
                                 activation_type=activation_type, tie_word_embeddings=tie_word_embeddings,)
 
         ft_t5 = FTT5(ft_encoder, ft_decoding)
@@ -345,6 +350,7 @@ def translate(args_dict):
             prev += batch_size
             input_token = tokenizer(input_texts, return_tensors='pt', padding=True)
 
+            print(f"{prev}/{len(src_text)}, moe = {t5_with_moe}")
             # An example to prevent generating "Chef"
             # bad_words_text = np.array([["Chef"]]* len(input_texts), dtype=object)
             # bad_words_list = to_word_list_format(bad_words_text, tokenizer)

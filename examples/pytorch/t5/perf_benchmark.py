@@ -123,8 +123,9 @@ def translate(args_dict):
             moe_layers_in_decoder = []
             if (ckpt_config.get('structure', 'moe_layers_in_encoder') != '[]'):
                 moe_layers_in_encoder = [int(n) for n in ckpt_config.get('structure', 'moe_layers_in_encoder')[1:-1].replace(" ", "").split(',')]
+                print("moe_layers_in_encoder: ", moe_layers_in_encoder)
             if (ckpt_config.get('structure', 'moe_layers_in_decoder') != '[]'):
-                moe_layers_in_decoder = [int(n) for n in ckpt_config.get('structure', 'moe_layers_in_encoder')[1:-1].replace(" ", "").split(',')]
+                moe_layers_in_decoder = [int(n) for n in ckpt_config.get('structure', 'moe_layers_in_decoder')[1:-1].replace(" ", "").split(',')]
 
         else:
             raise Exception("config file does exist with the ckpt !")

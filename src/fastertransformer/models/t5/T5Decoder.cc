@@ -575,11 +575,14 @@ void T5Decoder<T>::forward(std::vector<Tensor>*                         output_t
                                       Tensor{MEMORY_GPU, data_type, {local_batch_size, d_model_}, decoder_output});
         }
 
+        FT_LOG_TRACE("==== milestone decoder 201");
         ffn_layer_->forward(&ffn_output_tensors, &ffn_input_tensors, &layer_weight->ffn_weights);
+        FT_LOG_TRACE("==== milestone decoder 202");
 
         if (use_moe) {
             // residual addition for moe, we should pass the unnormed attention output if using pre_layernorm
             // and pass the normed attention output if using post_layernorm. They all point to the attn_out_buf_.
+            FT_LOG_TRACE("==== milestone decoder 203");
             finalize_moe_routing_kernelLauncher(fc2_result_,
                                                 decoder_output,
                                                 cross_attn_output_,
@@ -591,6 +594,7 @@ void T5Decoder<T>::forward(std::vector<Tensor>*                         output_t
                                                 d_model_,
                                                 moe_k_,
                                                 stream_);
+            FT_LOG_TRACE("==== milestone decoder 204");
         }
         else {
             auto* ffn_bias = layer_weight->ffn_weights.output_weight.bias;
