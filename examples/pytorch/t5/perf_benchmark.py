@@ -252,8 +252,13 @@ def translate(args_dict):
         )
 
         if args_dict["ckpt_path"] is not None:
-            ft_encoder_weight.load_from_bin(args_dict["ckpt_path"], model_type=model_type)
-            ft_decoding_weight.load_from_bin(args_dict["ckpt_path"], model_type=model_type)
+            # 31 tensors placeholders is needed for encoder
+            # ft_encoder_weight.w = [torch.tensor(1, dtype=torch.float32).contiguous().cuda() for _ in range(31)]
+            ft_encoder_weight.random_weights_for_inference_test();
+            ft_decoding_weight.random_weights_for_inference_test();
+
+            # ft_encoder_weight.load_from_bin(args_dict["ckpt_path"], model_type)
+            # ft_decoding_weight.load_from_bin(args_dict["ckpt_path"], model_type)
         else:
             ft_encoder_weight.load_from_model(t5_model)
             ft_decoding_weight.load_from_model(t5_model)
@@ -270,7 +275,7 @@ def translate(args_dict):
                                 encoder_config.d_model, remove_padding, encoder_config.num_layers,
                                 encoder_config.relative_attention_num_buckets, encoder_config.num_experts, encoder_config.moe_layer_index,
                                 128, False, q_scaling, tensor_para_size, pipeline_para_size, t5_with_bias,
-                                position_embedding_type, 0, activation_type)
+                                position_embedding_type, topk, activation_type)
         ft_decoding = FTT5Decoding(ft_decoding_weight.w, lib_path,
                                 decoder_config.num_heads, decoder_config.d_kv,
                                 decoder_config.d_ff, encoder_config.d_model,
@@ -283,7 +288,7 @@ def translate(args_dict):
                                 q_scaling,
                                 decoder_config.relative_attention_num_buckets, decoder_config.num_experts, decoder_config.moe_layer_index, max_distance=128,
                                 tensor_para_size=tensor_para_size, pipeline_para_size=pipeline_para_size,
-                                t5_with_bias=t5_with_bias, moe_k=0, activation_type=activation_type,
+                                t5_with_bias=t5_with_bias, moe_k=topk, activation_type=activation_type,
                                 position_embedding_type = position_embedding_type)
 
         ft_t5 = FTT5(ft_encoder, ft_decoding)
@@ -300,7 +305,7 @@ def translate(args_dict):
         start_time = datetime.now()
         while iter_idx < min_iterations or (datetime.now() - start_time).total_seconds() < min_duration:
             iter_idx += 1
-
+            print(f"{iter_idx}/{min_iterations}")
             if translation_result_list[i].frame_work == "HF":
                 if translation_result_list[i].name.find("beamsearch") != -1:
                     hf_outputs = t5_model.generate(input_token.input_ids.to("cuda"),

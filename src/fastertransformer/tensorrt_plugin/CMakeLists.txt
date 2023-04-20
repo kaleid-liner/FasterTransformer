@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(swin)
+# add_subdirectory(swin)
 add_subdirectory(t5)
-add_subdirectory(vit)
-if(ENABLE_FP8)
-    add_subdirectory(bert_fp8)
-endif()
+# add_subdirectory(vit)
+# if(ENABLE_FP8)
+#     add_subdirectory(bert_fp8)
+# endif()
 
-add_subdirectory(wenet)
+# add_subdirectory(wenet)

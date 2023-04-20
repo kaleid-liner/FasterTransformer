@@ -545,7 +545,7 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
     const size_t local_batch_size = getLocalBatchSize(request_batch_size, request_seq_len, pipeline_para_.world_size_);
     const size_t iteration_num    = request_batch_size / local_batch_size;
 
-    FT_LOG_DEBUG("=== milestone 1");
+    FT_LOG_TRACE("=== milestone 1");
     // NOTE: p/prompt-tuning process here (lookup prompt embedding tables by task name ids)
     // get p/prompt-tuning weight for each batch --> shape [batch]
     // --> ptrs with shape [prompt_len, hidden_size]
@@ -573,7 +573,7 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
 
         sync_check_cuda_error();
     }
-    FT_LOG_DEBUG("=== milestone 2");
+    FT_LOG_TRACE("=== milestone 2");
 
     for (uint ite = 0; ite < iteration_num; ite++) {
         size_t id_offset      = ite * local_batch_size;
@@ -581,7 +581,7 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
 
         const int* sequence_lengths = input_tensors->at("sequence_length").getPtr<int>() + id_offset;
 
-        FT_LOG_DEBUG("=== milestone 3");
+        FT_LOG_TRACE("=== milestone 3");
         if (position_embedding_type == PositionEmbeddingType::absolute) {
             if (has_p_prompt_tuning) {
                 // NOTE: add prompt embeddings here (for p/prompt tuning)
@@ -660,7 +660,7 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
 
         sync_check_cuda_error();
 
-        FT_LOG_DEBUG("=== milestone 4");
+        FT_LOG_TRACE("=== milestone 4");
         size_t  h_token_num;
         T*      t5_encoder_input_ptr;
         T*      t5_encoder_output_ptr;
@@ -760,10 +760,10 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
             }
         }
 
-        FT_LOG_DEBUG("=== milestone 5");
+        FT_LOG_TRACE("=== milestone 5");
         DataType data_type = getTensorType<T>();
 
-        FT_LOG_DEBUG("=== milestone 6");
+        FT_LOG_TRACE("=== milestone 6");
         for (uint i = 0; i < num_layer_; i++) {
             if (!isValidLayerParallelId(i)) {
                 continue;
@@ -773,7 +773,7 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
 
             T5EncoderLayerWeight<T>* layer_weight = t5_encoder_weights->t5_encoder_layer_weights[i];
 
-            FT_LOG_DEBUG("=== milestone 6");
+            FT_LOG_TRACE("=== milestone 6");
             if (isFirstLayerParallelId(i) && pipeline_para_.rank_ != 0) {
                 const int data_size = h_token_num * d_model_ / tensor_para_.world_size_;
                 ftNcclRecv(from_tensor + data_size * tensor_para_.rank_,
@@ -785,7 +785,7 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
                     ftNcclAllGather(from_tensor, from_tensor, data_size, tensor_para_.rank_, tensor_para_, stream_);
                 }
             }
-            FT_LOG_DEBUG("=== milestone 7");
+            FT_LOG_TRACE("=== milestone 7");
             if (layernorm_type_ == LayerNormType::pre_layernorm) {
                 invokeGeneralT5LayerNorm(normed_from_tensor_,
                                          from_tensor,
@@ -810,7 +810,7 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
                             std::vector<size_t>{local_batch_size, 1, request_seq_len, request_seq_len},
                             attention_mask_}}};
 
-                FT_LOG_DEBUG("=== milestone 8");
+                FT_LOG_TRACE("=== milestone 8");
                 attn_input_tensors.insertIfValid(
                     "relative_attention_bias",
                     Tensor{MEMORY_GPU,
@@ -820,13 +820,13 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
                                relative_attention_bias_ :
                                nullptr});
                 attn_input_tensors.insertIfValid("padding_offset", *padding_offset_tensor_ptr);
-                FT_LOG_DEBUG("=== milestone 9");
+                FT_LOG_TRACE("=== milestone 9");
 
                 if (has_ia3_tasks) {
                     attn_input_tensors.insert(
                         {"ia3_tasks", input_tensors->at("ia3_tasks").slice({local_batch_size}, id_offset)});
                 }
-                FT_LOG_DEBUG("=== milestone 10");
+                FT_LOG_TRACE("=== milestone 10");
                 TensorMap attn_output_tensors{
                     {"hidden_features",
                      Tensor{MEMORY_GPU, data_type, std::vector<size_t>{h_token_num, d_model_}, attn_out_buf_}}};
@@ -840,10 +840,10 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
                              .slice({local_batch_size, 1, head_num_, request_seq_len, request_seq_len},
                                     output_attentions_offset)});
                 }
-                FT_LOG_DEBUG("=== milestone 11");
+                FT_LOG_TRACE("=== milestone 11");
 
                 attention_layer_->forward(&attn_output_tensors, &attn_input_tensors, &layer_weight->attention_weights_);
-                FT_LOG_DEBUG("=== milestone 12");
+                FT_LOG_TRACE("=== milestone 12");
             }
 
             auto* attention_bias = layer_weight->attention_weights_.attention_output_weight.bias;
@@ -854,14 +854,14 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
                 }
                 Tensor input_tensor{MEMORY_GPU, data_type, std::vector<size_t>{h_token_num, d_model_}, attn_out_buf_};
                 Tensor output_tensor{MEMORY_GPU, data_type, std::vector<size_t>{h_token_num, d_model_}, attn_out_buf_};
-                FT_LOG_DEBUG("=== milestone 13");
+                FT_LOG_TRACE("=== milestone 13");
                 adapter_layer_->forward(
                     &input_tensor, &output_tensor, &layer_weight->adapter_weights_.after_attention_adapter_weights_);
-                FT_LOG_DEBUG("=== milestone 14");
+                FT_LOG_TRACE("=== milestone 14");
             }
 
             if (layernorm_type_ == LayerNormType::post_layernorm) {
-                FT_LOG_DEBUG("=== milestone 15");
+                FT_LOG_TRACE("=== milestone 15");
                 invokeGeneralAddBiasResidualT5PreLayerNorm(attn_out_buf_,
                                                            attn_out_buf_,
                                                            from_tensor,
@@ -872,10 +872,10 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
                                                            h_token_num,
                                                            d_model_,
                                                            stream_);
-                FT_LOG_DEBUG("=== milestone 16");
+                FT_LOG_TRACE("=== milestone 16");
             }
             else if (layernorm_type_ == LayerNormType::pre_layernorm) {
-                FT_LOG_DEBUG("=== milestone 17");
+                FT_LOG_TRACE("=== milestone 17");
                 invokeGeneralAddBiasResidualT5PreLayerNorm(attn_out_buf_,
                                                            normed_attn_out_buf_,
                                                            from_tensor,
@@ -886,13 +886,13 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
                                                            h_token_num,
                                                            d_model_,
                                                            stream_);
-                FT_LOG_DEBUG("=== milestone 18");
+                FT_LOG_TRACE("=== milestone 18");
             }
 
             bool use_moe = false;
             // FFN
             {
-                FT_LOG_DEBUG("=== milestone 19");
+                FT_LOG_TRACE("=== milestone 19");
                 TensorMap ffn_input_tensors(
                     {{"ffn_input",
                       Tensor{MEMORY_GPU,
@@ -908,10 +908,10 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
 
                 TensorMap ffn_output_tensors;
 
-                FT_LOG_DEBUG("=== milestone 20");
+                FT_LOG_TRACE("=== milestone 20");
                 use_moe = std::find(moe_layer_index_.begin(), moe_layer_index_.end(), i) != moe_layer_index_.end();
                 if (use_moe) {
-                    FT_LOG_DEBUG("=== milestone 21");
+                    FT_LOG_TRACE("=== milestone 21");
                     ffn_input_tensors.insert("moe_k", Tensor{MEMORY_CPU, TYPE_INT32, {1}, &moe_k_});
                     FT_LOG_TRACE("moe_k_ * h_token_num, d_model_ = (%d * %d, %d), fc2_result %x", moe_k_, h_token_num, d_model_, fc2_result_);
                     ffn_output_tensors.insert(
@@ -931,13 +931,13 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
                                               Tensor{MEMORY_GPU, data_type, {h_token_num, d_model_}, out_tensor});
                 }
 
-                    FT_LOG_DEBUG("=== milestone 22");
+                    FT_LOG_TRACE("=== milestone 22");
                 ffn_layer_->forward(&ffn_output_tensors, &ffn_input_tensors, &layer_weight->ffn_weights_);
-                    FT_LOG_DEBUG("=== milestone 23");
+                    FT_LOG_TRACE("=== milestone 23");
             }
 
             if (use_moe) {
-                    FT_LOG_DEBUG("=== milestone 24");
+                    FT_LOG_TRACE("=== milestone 24");
                 if (layernorm_type_ == LayerNormType::pre_layernorm) {
                     // residual addition for moe, we should pass the unnormed attention output if using pre_layernorm
                     // and pass the normed attention output if using post_layernorm. They all point to the
@@ -1065,7 +1065,7 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
             }
         }
 
-        FT_LOG_DEBUG("=== milestone end of iteration %d", ite);
+        FT_LOG_TRACE("=== milestone end of iteration %d", ite);
         delete padding_offset_tensor_ptr;
     }
     if (is_free_buffer_after_forward_ == true) {

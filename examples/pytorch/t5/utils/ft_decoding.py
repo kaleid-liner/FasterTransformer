@@ -23,35 +23,43 @@ class FTT5DecodingWeight(object):
     
     def random_weights_for_inference_test(self):
 
-        # suppose hidden_dim = d_model
-        #         inter_size = d_ff
-        # TODO: change hidden_dim to num_heads * d_kv"
+        # suppose inter_size = d_ff
+        
+        hidden_dim = self.config.num_heads * self.config.d_kv;
         print("random_weights_for_inference_test for FT T5 Decoding are used!!!!!!!!!!!!!!")
         self.w = []
         # CHECK_INPUT(self_layernorm_gamma, _st);                     // layer_num, d_model
         self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
         # CHECK_INPUT(self_kernel_q, _st);                            // layer_num, d_model, 3 * hidden_dim
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, 3 * self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, 3 * hidden_dim).astype(np.float32)))
         # CHECK_INPUT(self_output_kernel, _st);                       // layer_num, hidden_dim, d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, hidden_dim, self.config.d_model).astype(np.float32)))
         # CHECK_INPUT(cross_layernorm_gamma, _st);                    // layer_num, d_model
         self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
         # CHECK_INPUT(cross_kernel_q, _st);                           // layer_num, d_model, hidden_dim
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, hidden_dim).astype(np.float32)))
         # CHECK_INPUT(cross_kernel_k, _st);                           // layer_num, mem_d_model, hidden_dim
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, hidden_dim).astype(np.float32)))
         # CHECK_INPUT(cross_kernel_v, _st);                           // layer_num, mem_d_model, hidden_dim
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, hidden_dim).astype(np.float32)))
         # CHECK_INPUT(cross_output_kernel, _st);                      // layer_num, hidden_dim, d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, hidden_dim, self.config.d_model).astype(np.float32)))
         # CHECK_INPUT(ffn_layernorm_gamma, _st);                      // layer_num, d_model
         self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
         # CHECK_INPUT(inter_kernel, _st);                             // layer_num, d_model, inter_size
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, self.config.d_ff).astype(np.float32)))
+
+        moe_layer_num = len(self.config.moe_layer_index);
+        no_moe_layer_num = self.config.num_layers - moe_layer_num
+        size = (no_moe_layer_num + moe_layer_num * self.config.num_experts) * self.config.d_model * self.config.d_ff;
+
+        self.w.append(torch.tensor(np.random.rand(size).astype(np.float32)))
+
         # CHECK_INPUT(inter_kernel2, _st);                            // layer_num, d_model, inter_size
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, self.config.d_ff).astype(np.float32)))
+        size = (no_moe_layer_num) * self.config.d_model * self.config.d_ff;
+        self.w.append(torch.tensor(np.random.rand(size).astype(np.float32)))
         # CHECK_INPUT(output_kernel, _st);                            // layer_num, inter_size, d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_ff, self.config.d_model).astype(np.float32)))
+        size = (no_moe_layer_num + moe_layer_num * self.config.num_experts) * self.config.d_ff * self.config.d_model;
+        self.w.append(torch.tensor(np.random.rand(size).astype(np.float32)))
         # CHECK_INPUT(decoding_gamma, _st);                           // d_model
         self.w.append(torch.tensor(np.random.rand(self.config.d_model).astype(np.float32)))
         # CHECK_INPUT(embedding_table, _st);                          // vocab_size, d_model
@@ -64,27 +72,29 @@ class FTT5DecodingWeight(object):
         #     CHECK_INPUT(self_layernorm_beta, _st);   // layer_num, d_model
         self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
         #     CHECK_INPUT(self_bias_qkv, _st);         // layer_num,3 * hidden_dim
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, 3 * self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, 3 * hidden_dim).astype(np.float32)))
         #     CHECK_INPUT(self_output_bias, _st);      // layer_num, d_model
         self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
         #     CHECK_INPUT(cross_layernorm_beta, _st);  // layer_num, d_model
         self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
         #     CHECK_INPUT(cross_bias_q, _st);          // layer_num, hidden_dim
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, hidden_dim).astype(np.float32)))
         #     CHECK_INPUT(cross_bias_k, _st);          // layer_num, hidden_dim
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, hidden_dim).astype(np.float32)))
         #     CHECK_INPUT(cross_bias_v, _st);          // layer_num, hidden_dim
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, hidden_dim).astype(np.float32)))
         #     CHECK_INPUT(cross_output_bias, _st);     // layer_num, d_model
         self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
         #     CHECK_INPUT(ffn_layernorm_beta, _st);    // layer_num, d_model
         self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
         #     CHECK_INPUT(inter_bias, _st);            // layer_num, inter_size
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_ff).astype(np.float32)))
+        size = (no_moe_layer_num + moe_layer_num * self.config.num_experts) * self.config.d_ff;
+        self.w.append(torch.tensor(np.random.rand(size).astype(np.float32)))
         #     CHECK_INPUT(inter_bias2, _st);           // layer_num, inter_size
         self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_ff).astype(np.float32)))
         #     CHECK_INPUT(output_bias, _st);           // layer_num, d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
+        size = (no_moe_layer_num + moe_layer_num * self.config.num_experts) * self.config.d_model;
+        self.w.append(torch.tensor(np.random.rand(size).astype(np.float32)))
         #     CHECK_INPUT(decoding_beta, _st);         // d_model
         self.w.append(torch.tensor(np.random.rand(self.config.d_model).astype(np.float32)))
         #     CHECK_INPUT(embedding_bias, _st);        // vocab_size
@@ -92,7 +102,7 @@ class FTT5DecodingWeight(object):
         # }
         # if (expert_num != 0) {
         #     CHECK_INPUT(moe_gate, _st);  // hidden_dim, expert_num
-        self.w.append(torch.tensor(np.random.rand(self.config.d_model, self.config.num_experts).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(moe_layer_num, self.config.d_model, self.config.num_experts).astype(np.float32)))
         # }
         for _ in range(8):
             self.w.append(torch.zeros(1))
@@ -588,32 +598,27 @@ class FTT5(nn.Module):
         ft_encoder_outputs = self.encoder.forward(input_ids, mem_seq_len, inputs_embeds)
 
         print("===== ft encoder forward finished")
-
-
-        print("debug exit");
-        exit(0)
-
         print("===== ft decoder forward start")
-        # results = self.decoding.forward(beam_size,  # optional, can be None
-        #                                 max_seq_len,
-        #                                 top_k,  # optional, can be None
-        #                                 top_p,  # optional, can be None
-        #                                 beam_search_diversity_rate,  # optional, can be None
-        #                                 temperature,  # optional, can be None
-        #                                 len_penalty,  # optional, can be None
-        #                                 repetition_penalty,  # optional, can be None
-        #                                 presence_penalty,  # optional, can be None
-        #                                 min_length,  # optional, can be None
-        #                                 random_seed,  # optional, can be None
-        #                                 ft_encoder_outputs,
-        #                                 mem_seq_len,
-        #                                 is_return_output_log_probs,  # optional, can be None
-        #                                 is_return_cum_log_probs,  # optional, can be None
-        #                                 is_return_cross_attentions,  # optional, can be None
-        #                                 bad_words_list, # optional, can be None
-        #                                 stop_words_list, # optional, can be None
-        #                                 )
-        # print("===== ft decoder forward finished")
+        results = self.decoding.forward(beam_size,  # optional, can be None
+                                        max_seq_len,
+                                        top_k,  # optional, can be None
+                                        top_p,  # optional, can be None
+                                        beam_search_diversity_rate,  # optional, can be None
+                                        temperature,  # optional, can be None
+                                        len_penalty,  # optional, can be None
+                                        repetition_penalty,  # optional, can be None
+                                        presence_penalty,  # optional, can be None
+                                        min_length,  # optional, can be None
+                                        random_seed,  # optional, can be None
+                                        ft_encoder_outputs,
+                                        mem_seq_len,
+                                        is_return_output_log_probs,  # optional, can be None
+                                        is_return_cum_log_probs,  # optional, can be None
+                                        is_return_cross_attentions,  # optional, can be None
+                                        bad_words_list, # optional, can be None
+                                        stop_words_list, # optional, can be None
+                                        )
+        print("===== ft decoder forward finished")
 
         ft_decoding_outputs = results.pop(0).reshape([-1, beam_size, max_seq_len])
         ft_decoding_seq_lens = results.pop(0).reshape([-1, beam_size])

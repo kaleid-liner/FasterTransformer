@@ -20,52 +20,52 @@ set_property(TARGET th_utils PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
 target_link_libraries(th_utils PUBLIC "${TORCH_LIBRARIES}" -lcublas -lcudart -lcurand tensor)
 
 add_subdirectory(common)
-add_subdirectory(decoder)
+# add_subdirectory(decoder)
 add_subdirectory(decoding)
 add_subdirectory(encoder)
-add_subdirectory(longformer)
-add_subdirectory(swin)
-add_subdirectory(vit)
-add_subdirectory(multi_gpu_gpt)
+# add_subdirectory(longformer)
+# add_subdirectory(swin)
+# add_subdirectory(vit)
+# add_subdirectory(multi_gpu_gpt)
 add_subdirectory(t5)
-add_subdirectory(bart)
+# add_subdirectory(bart)
 add_subdirectory(bert)
-add_subdirectory(deberta)
+# add_subdirectory(deberta)
 
 add_library(th_transformer SHARED
-            $<TARGET_OBJECTS:th_bart>
-            $<TARGET_OBJECTS:th_bert>
+            # $<TARGET_OBJECTS:th_bart>
+            # $<TARGET_OBJECTS:th_bert>
             $<TARGET_OBJECTS:th_common>
-            $<TARGET_OBJECTS:th_deberta>
-            $<TARGET_OBJECTS:th_decoder>
+            # $<TARGET_OBJECTS:th_deberta>
+            # $<TARGET_OBJECTS:th_decoder>
             $<TARGET_OBJECTS:th_decoding>
             $<TARGET_OBJECTS:th_encoder>
-            $<TARGET_OBJECTS:th_gather_tree>
-            $<TARGET_OBJECTS:th_longformer>
-            $<TARGET_OBJECTS:th_parallel_gpt>
-            $<TARGET_OBJECTS:th_swintransformer>
+            # $<TARGET_OBJECTS:th_gather_tree>
+            # $<TARGET_OBJECTS:th_longformer>
+            # $<TARGET_OBJECTS:th_parallel_gpt>
+            # $<TARGET_OBJECTS:th_swintransformer>
             $<TARGET_OBJECTS:th_t5>
             $<TARGET_OBJECTS:th_utils>
-            $<TARGET_OBJECTS:th_vit>
+            # $<TARGET_OBJECTS:th_vit>
 )
 target_link_libraries(th_transformer PUBLIC "${TORCH_LIBRARIES}"
-                      th_bart
-                      th_bert
+                    #   th_bart
+                    #   th_bert
                       th_common
-                      th_deberta
-                      th_decoder
+                    #   th_deberta
+                    #   th_decoder
                       th_decoding
                       th_encoder
-                      th_gather_tree
-                      th_longformer
-                      th_parallel_gpt
-                      th_swintransformer
+                    #   th_gather_tree
+                    #   th_longformer
+                    #   th_parallel_gpt
+                    #   th_swintransformer
                       th_t5
                       th_utils
-                      th_vit
+                    #   th_vit
 )
 
-if(ENABLE_FP8)
-add_subdirectory(gpt_fp8)
-target_link_libraries(th_transformer PUBLIC $<TARGET_OBJECTS:th_gpt_fp8> th_gpt_fp8)
-endif()
+# if(ENABLE_FP8)
+# add_subdirectory(gpt_fp8)/
+# target_link_libraries(th_transformer PUBLIC $<TARGET_OBJECTS:th_gpt_fp8> th_gpt_fp8)
+# endif()

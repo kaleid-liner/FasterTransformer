@@ -70,6 +70,17 @@
         "cfenv": "cpp",
         "typeindex": "cpp",
         "variant": "cpp",
-        "bit": "cpp"
+        "bit": "cpp",
+        "__node_handle": "cpp",
+        "__split_buffer": "cpp",
+        "filesystem": "cpp",
+        "queue": "cpp",
+        "stack": "cpp",
+        "codecvt": "cpp",
+        "shared_mutex": "cpp",
+        "__nullptr": "cpp",
+        "locale": "cpp",
+        "__hash_table": "cpp",
+        "__tree": "cpp"
     }
 }

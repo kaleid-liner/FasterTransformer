@@ -33,31 +33,37 @@ class FTT5EncoderWeight(object):
         print("random_weights_for_inference_test for FT T5Encoder are used!!!!!!!!!!!!!!")
         self.w = []
         # CHECK_INPUT(attr_output_layernorm_gamma, _st);              // d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
 
         # CHECK_INPUT(q_kernel, _st);                                 // d_model, hidden_dim
-        self.w.append(torch.tensor(np.random.rand(self.config.d_model, hidden_dim).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, hidden_dim).astype(np.float32)))
 
         # CHECK_INPUT(k_kernel, _st);                                 // d_model, hidden_dim
-        self.w.append(torch.tensor(np.random.rand(self.config.d_model, hidden_dim).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, hidden_dim).astype(np.float32)))
 
         # CHECK_INPUT(v_kernel, _st);                                 // d_model, hidden_dim
-        self.w.append(torch.tensor(np.random.rand(self.config.d_model, hidden_dim).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, hidden_dim).astype(np.float32)))
 
         # CHECK_INPUT(attr_output_kernel, _st);                       // hidden_dim, d_model
-        self.w.append(torch.tensor(np.random.rand(hidden_dim, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, hidden_dim, self.config.d_model).astype(np.float32)))
 
         # CHECK_INPUT(output_layernorm_gamma, _st);                   // d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
 
         # CHECK_INPUT(inter_kernel, _st);                             // d_model, inter_size
-        self.w.append(torch.tensor(np.random.rand(self.config.d_model, self.config.d_ff).astype(np.float32)))
+
+        moe_layer_num = len(self.config.moe_layer_index);
+        no_moe_layer_num = self.config.num_layers - moe_layer_num
+
+        size = (no_moe_layer_num + moe_layer_num * self.config.num_experts) * self.config.d_model * self.config.d_ff;
+        self.w.append(torch.tensor(np.random.rand(size).astype(np.float32)))
 
         # CHECK_INPUT(inter_kernel2, _st);                            // d_model, inter_size
-        self.w.append(torch.tensor(np.random.rand(self.config.d_model, self.config.d_ff).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, self.config.d_ff).astype(np.float32)))
 
         # CHECK_INPUT(output_kernel, _st);                            // inter_size, d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.d_ff, self.config.d_model).astype(np.float32)))
+        size = (no_moe_layer_num + moe_layer_num * self.config.num_experts) * self.config.d_ff * self.config.d_model;
+        self.w.append(torch.tensor(np.random.rand(size).astype(np.float32)))
 
         # CHECK_INPUT(post_transformer_layernorm_gamma, _st);         // d_model
         self.w.append(torch.tensor(np.random.rand(self.config.d_model).astype(np.float32)))
@@ -70,38 +76,40 @@ class FTT5EncoderWeight(object):
         
         # if (t5_with_bias) {
         #     CHECK_INPUT(attr_output_layernorm_beta, _st);       // d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
         
         #     CHECK_INPUT(q_bias, _st);                           // hidden_dim
-        self.w.append(torch.tensor(np.random.rand(hidden_dim).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, hidden_dim).astype(np.float32)))
 
         #     CHECK_INPUT(k_bias, _st);                           // hidden_dim
-        self.w.append(torch.tensor(np.random.rand(hidden_dim).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, hidden_dim).astype(np.float32)))
 
         #     CHECK_INPUT(v_bias, _st);                           // hidden_dim
-        self.w.append(torch.tensor(np.random.rand(hidden_dim).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, hidden_dim).astype(np.float32)))
 
         #     CHECK_INPUT(attr_output_bias, _st);                 // d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
 
         #     CHECK_INPUT(output_layernorm_beta, _st);            // d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
 
         #     CHECK_INPUT(inter_bias, _st);                       // inter_size
-        self.w.append(torch.tensor(np.random.rand(self.config.d_ff).astype(np.float32)))
+        size = (no_moe_layer_num + moe_layer_num * self.config.num_experts) * self.config.d_ff
+        self.w.append(torch.tensor(np.random.rand(size).astype(np.float32)))
 
         #     CHECK_INPUT(inter_bias2, _st);                      // inter_size
-        self.w.append(torch.tensor(np.random.rand(self.config.d_ff).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_ff).astype(np.float32)))
 
         #     CHECK_INPUT(output_bias, _st);                      // d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.d_model).astype(np.float32)))
+        size = (no_moe_layer_num + moe_layer_num * self.config.num_experts) * self.config.d_model
+        self.w.append(torch.tensor(np.random.rand(size).astype(np.float32)))
 
         #     CHECK_INPUT(post_transformer_layernorm_beta, _st);  // d_model
         self.w.append(torch.tensor(np.random.rand(self.config.d_model).astype(np.float32)))
         # }
         # if (expert_num != 0) {
         #     CHECK_INPUT(moe_gate, _st);  // hidden_dim, num_experts
-        self.w.append(torch.tensor(np.random.rand(hidden_dim, self.config.num_experts).astype(np.float32)))
+        self.w.append(torch.tensor(np.random.rand(moe_layer_num, hidden_dim, self.config.num_experts).astype(np.float32)))
         # }
 
         # placeholders

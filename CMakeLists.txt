@@ -302,7 +302,7 @@ add_subdirectory(3rdparty)
 add_subdirectory(src)
 add_subdirectory(examples)
 
-add_subdirectory(tests)
+# add_subdirectory(tests)
 
 # # Mesaure the compile time
 option(MEASURE_BUILD_TIME "Measure the build time of each module" OFF)
@@ -318,36 +318,36 @@ add_library(transformer-shared SHARED
   $<TARGET_OBJECTS:BaseBeamSearchLayer>
   $<TARGET_OBJECTS:BaseSamplingLayer>
   $<TARGET_OBJECTS:BeamSearchLayer>
-  $<TARGET_OBJECTS:Bert>
-  $<TARGET_OBJECTS:BertLayerWeight>
-  $<TARGET_OBJECTS:BertTritonBackend>
-  $<TARGET_OBJECTS:BertWeight>
+  # $<TARGET_OBJECTS:Bert>
+  # $<TARGET_OBJECTS:BertLayerWeight>
+  # $<TARGET_OBJECTS:BertTritonBackend>
+  # $<TARGET_OBJECTS:BertWeight>
   $<TARGET_OBJECTS:DecoderCrossAttentionLayer>
   $<TARGET_OBJECTS:DecoderSelfAttentionLayer>
   $<TARGET_OBJECTS:DynamicDecodeLayer>
   $<TARGET_OBJECTS:FfnLayer>
   $<TARGET_OBJECTS:FusedAttentionLayer>
-  $<TARGET_OBJECTS:GptContextAttentionLayer>
-  $<TARGET_OBJECTS:GptJ>
-  $<TARGET_OBJECTS:GptJContextDecoder>
-  $<TARGET_OBJECTS:GptJDecoder>
-  $<TARGET_OBJECTS:GptJDecoderLayerWeight>
-  $<TARGET_OBJECTS:GptJTritonBackend>
-  $<TARGET_OBJECTS:GptJWeight>
-  $<TARGET_OBJECTS:GptNeoX>
-  $<TARGET_OBJECTS:GptNeoXContextDecoder>
-  $<TARGET_OBJECTS:GptNeoXDecoder>
-  $<TARGET_OBJECTS:GptNeoXDecoderLayerWeight>
-  $<TARGET_OBJECTS:GptNeoXTritonBackend>
-  $<TARGET_OBJECTS:GptNeoXWeight>
+  # $<TARGET_OBJECTS:GptContextAttentionLayer>
+  # $<TARGET_OBJECTS:GptJ>
+  # $<TARGET_OBJECTS:GptJContextDecoder>
+  # $<TARGET_OBJECTS:GptJDecoder>
+  # $<TARGET_OBJECTS:GptJDecoderLayerWeight>
+  # $<TARGET_OBJECTS:GptJTritonBackend>
+  # $<TARGET_OBJECTS:GptJWeight>
+  # $<TARGET_OBJECTS:GptNeoX>
+  # $<TARGET_OBJECTS:GptNeoXContextDecoder>
+  # $<TARGET_OBJECTS:GptNeoXDecoder>
+  # $<TARGET_OBJECTS:GptNeoXDecoderLayerWeight>
+  # $<TARGET_OBJECTS:GptNeoXTritonBackend>
+  # $<TARGET_OBJECTS:GptNeoXWeight>
   $<TARGET_OBJECTS:LinearAdapterLayer>
   $<TARGET_OBJECTS:OnlineBeamSearchLayer>
-  $<TARGET_OBJECTS:ParallelGpt>
-  $<TARGET_OBJECTS:ParallelGptContextDecoder>
-  $<TARGET_OBJECTS:ParallelGptDecoder>
-  $<TARGET_OBJECTS:ParallelGptDecoderLayerWeight>
-  $<TARGET_OBJECTS:ParallelGptTritonBackend>
-  $<TARGET_OBJECTS:ParallelGptWeight>
+  # $<TARGET_OBJECTS:ParallelGpt>
+  # $<TARGET_OBJECTS:ParallelGptContextDecoder>
+  # $<TARGET_OBJECTS:ParallelGptDecoder>
+  # $<TARGET_OBJECTS:ParallelGptDecoderLayerWeight>
+  # $<TARGET_OBJECTS:ParallelGptTritonBackend>
+  # $<TARGET_OBJECTS:ParallelGptWeight>
   $<TARGET_OBJECTS:T5Common>
   $<TARGET_OBJECTS:T5Decoder>
   $<TARGET_OBJECTS:T5Decoding>

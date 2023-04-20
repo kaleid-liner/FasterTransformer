@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#pragma once
 #include "src/fastertransformer/models/t5/T5Encoder.h"
 #include "src/fastertransformer/th_op/th_utils.h"
 #include "src/fastertransformer/utils/nccl_utils.h"
