@@ -312,153 +312,153 @@ if (MEASURE_BUILD_TIME)
   set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "${CMAKE_COMMAND} -E time")
 endif()
 
-########################################
+# ########################################
 
-add_library(transformer-shared SHARED
-  $<TARGET_OBJECTS:BaseBeamSearchLayer>
-  $<TARGET_OBJECTS:BaseSamplingLayer>
-  $<TARGET_OBJECTS:BeamSearchLayer>
-  # $<TARGET_OBJECTS:Bert>
-  # $<TARGET_OBJECTS:BertLayerWeight>
-  # $<TARGET_OBJECTS:BertTritonBackend>
-  # $<TARGET_OBJECTS:BertWeight>
-  $<TARGET_OBJECTS:DecoderCrossAttentionLayer>
-  $<TARGET_OBJECTS:DecoderSelfAttentionLayer>
-  $<TARGET_OBJECTS:DynamicDecodeLayer>
-  $<TARGET_OBJECTS:FfnLayer>
-  $<TARGET_OBJECTS:FusedAttentionLayer>
-  # $<TARGET_OBJECTS:GptContextAttentionLayer>
-  # $<TARGET_OBJECTS:GptJ>
-  # $<TARGET_OBJECTS:GptJContextDecoder>
-  # $<TARGET_OBJECTS:GptJDecoder>
-  # $<TARGET_OBJECTS:GptJDecoderLayerWeight>
-  # $<TARGET_OBJECTS:GptJTritonBackend>
-  # $<TARGET_OBJECTS:GptJWeight>
-  # $<TARGET_OBJECTS:GptNeoX>
-  # $<TARGET_OBJECTS:GptNeoXContextDecoder>
-  # $<TARGET_OBJECTS:GptNeoXDecoder>
-  # $<TARGET_OBJECTS:GptNeoXDecoderLayerWeight>
-  # $<TARGET_OBJECTS:GptNeoXTritonBackend>
-  # $<TARGET_OBJECTS:GptNeoXWeight>
-  $<TARGET_OBJECTS:LinearAdapterLayer>
-  $<TARGET_OBJECTS:OnlineBeamSearchLayer>
-  # $<TARGET_OBJECTS:ParallelGpt>
-  # $<TARGET_OBJECTS:ParallelGptContextDecoder>
-  # $<TARGET_OBJECTS:ParallelGptDecoder>
-  # $<TARGET_OBJECTS:ParallelGptDecoderLayerWeight>
-  # $<TARGET_OBJECTS:ParallelGptTritonBackend>
-  # $<TARGET_OBJECTS:ParallelGptWeight>
-  $<TARGET_OBJECTS:T5Common>
-  $<TARGET_OBJECTS:T5Decoder>
-  $<TARGET_OBJECTS:T5Decoding>
-  $<TARGET_OBJECTS:T5Encoder>
-  $<TARGET_OBJECTS:T5TritonBackend>
-  $<TARGET_OBJECTS:T5EncoderTritonBackend>
-  $<TARGET_OBJECTS:TensorParallelDecoderCrossAttentionLayer>
-  $<TARGET_OBJECTS:TensorParallelDecoderSelfAttentionLayer>
-  $<TARGET_OBJECTS:TensorParallelGeluFfnLayer>
-  $<TARGET_OBJECTS:TensorParallelSiluFfnLayer>
-  $<TARGET_OBJECTS:TensorParallelGptContextAttentionLayer>
-  $<TARGET_OBJECTS:TensorParallelReluFfnLayer>
-  $<TARGET_OBJECTS:TensorParallelUnfusedAttentionLayer>
-  $<TARGET_OBJECTS:TopKSamplingLayer>
-  $<TARGET_OBJECTS:TopPSamplingLayer>
-  $<TARGET_OBJECTS:TransformerTritonBackend>
-  $<TARGET_OBJECTS:UnfusedAttentionLayer>
-  $<TARGET_OBJECTS:activation_int8_kernels>
-  $<TARGET_OBJECTS:activation_kernels>
-  $<TARGET_OBJECTS:add_bias_transpose_kernels>
-  $<TARGET_OBJECTS:add_residual_kernels>
-  $<TARGET_OBJECTS:ban_bad_words>
-  $<TARGET_OBJECTS:beam_search_penalty_kernels>
-  $<TARGET_OBJECTS:beam_search_topk_kernels>
-  $<TARGET_OBJECTS:bert_preprocess_kernels>
-  $<TARGET_OBJECTS:calibrate_quantize_weight_kernels>
-  $<TARGET_OBJECTS:cublasAlgoMap>
-  $<TARGET_OBJECTS:cublasMMWrapper>
-  $<TARGET_OBJECTS:cuda_driver_wrapper>
-  $<TARGET_OBJECTS:cuda_utils>
-  $<TARGET_OBJECTS:custom_ar_comm>
-  $<TARGET_OBJECTS:custom_ar_kernels>
-  $<TARGET_OBJECTS:cutlass_heuristic>
-  $<TARGET_OBJECTS:cutlass_preprocessors>
-  $<TARGET_OBJECTS:decoder_masked_multihead_attention>
-  $<TARGET_OBJECTS:decoding_kernels>
-  $<TARGET_OBJECTS:fpA_intB_gemm>
-  $<TARGET_OBJECTS:gen_relative_pos_bias>
-  $<TARGET_OBJECTS:gpt_kernels>
-  $<TARGET_OBJECTS:int8_gemm>
-  $<TARGET_OBJECTS:layernorm_int8_kernels>
-  $<TARGET_OBJECTS:layernorm_kernels>
-  $<TARGET_OBJECTS:layout_transformer_int8_kernels>
-  $<TARGET_OBJECTS:logprob_kernels>
-  $<TARGET_OBJECTS:logger>
-  $<TARGET_OBJECTS:longformer_kernels>
-  $<TARGET_OBJECTS:matrix_transpose_kernels>
-  $<TARGET_OBJECTS:matrix_vector_multiplication>
-  $<TARGET_OBJECTS:memory_utils>
-  $<TARGET_OBJECTS:moe_gemm_kernels>
-  $<TARGET_OBJECTS:moe_kernels>
-  $<TARGET_OBJECTS:mpi_utils>
-  $<TARGET_OBJECTS:nccl_utils>
-  $<TARGET_OBJECTS:nvtx_utils>
-  $<TARGET_OBJECTS:online_softmax_beamsearch_kernels>
-  $<TARGET_OBJECTS:quantization_int8_kernels>
-  $<TARGET_OBJECTS:sampling_penalty_kernels>
-  $<TARGET_OBJECTS:sampling_topk_kernels>
-  $<TARGET_OBJECTS:sampling_topp_kernels>
-  $<TARGET_OBJECTS:softmax_int8_kernels>
-  $<TARGET_OBJECTS:stop_criteria>
-  $<TARGET_OBJECTS:tensor>
-  $<TARGET_OBJECTS:transpose_int8_kernels>
-  $<TARGET_OBJECTS:trt_fused_multi_head_attention>
-  $<TARGET_OBJECTS:unfused_attention_kernels>
-  $<TARGET_OBJECTS:word_list>
-)
+# add_library(transformer-shared SHARED
+#   $<TARGET_OBJECTS:BaseBeamSearchLayer>
+#   $<TARGET_OBJECTS:BaseSamplingLayer>
+#   $<TARGET_OBJECTS:BeamSearchLayer>
+#   # $<TARGET_OBJECTS:Bert>
+#   # $<TARGET_OBJECTS:BertLayerWeight>
+#   # $<TARGET_OBJECTS:BertTritonBackend>
+#   # $<TARGET_OBJECTS:BertWeight>
+#   $<TARGET_OBJECTS:DecoderCrossAttentionLayer>
+#   $<TARGET_OBJECTS:DecoderSelfAttentionLayer>
+#   $<TARGET_OBJECTS:DynamicDecodeLayer>
+#   $<TARGET_OBJECTS:FfnLayer>
+#   $<TARGET_OBJECTS:FusedAttentionLayer>
+#   # $<TARGET_OBJECTS:GptContextAttentionLayer>
+#   # $<TARGET_OBJECTS:GptJ>
+#   # $<TARGET_OBJECTS:GptJContextDecoder>
+#   # $<TARGET_OBJECTS:GptJDecoder>
+#   # $<TARGET_OBJECTS:GptJDecoderLayerWeight>
+#   # $<TARGET_OBJECTS:GptJTritonBackend>
+#   # $<TARGET_OBJECTS:GptJWeight>
+#   # $<TARGET_OBJECTS:GptNeoX>
+#   # $<TARGET_OBJECTS:GptNeoXContextDecoder>
+#   # $<TARGET_OBJECTS:GptNeoXDecoder>
+#   # $<TARGET_OBJECTS:GptNeoXDecoderLayerWeight>
+#   # $<TARGET_OBJECTS:GptNeoXTritonBackend>
+#   # $<TARGET_OBJECTS:GptNeoXWeight>
+#   $<TARGET_OBJECTS:LinearAdapterLayer>
+#   $<TARGET_OBJECTS:OnlineBeamSearchLayer>
+#   # $<TARGET_OBJECTS:ParallelGpt>
+#   # $<TARGET_OBJECTS:ParallelGptContextDecoder>
+#   # $<TARGET_OBJECTS:ParallelGptDecoder>
+#   # $<TARGET_OBJECTS:ParallelGptDecoderLayerWeight>
+#   # $<TARGET_OBJECTS:ParallelGptTritonBackend>
+#   # $<TARGET_OBJECTS:ParallelGptWeight>
+#   $<TARGET_OBJECTS:T5Common>
+#   $<TARGET_OBJECTS:T5Decoder>
+#   $<TARGET_OBJECTS:T5Decoding>
+#   $<TARGET_OBJECTS:T5Encoder>
+#   $<TARGET_OBJECTS:T5TritonBackend>
+#   $<TARGET_OBJECTS:T5EncoderTritonBackend>
+#   $<TARGET_OBJECTS:TensorParallelDecoderCrossAttentionLayer>
+#   $<TARGET_OBJECTS:TensorParallelDecoderSelfAttentionLayer>
+#   $<TARGET_OBJECTS:TensorParallelGeluFfnLayer>
+#   $<TARGET_OBJECTS:TensorParallelSiluFfnLayer>
+#   $<TARGET_OBJECTS:TensorParallelGptContextAttentionLayer>
+#   $<TARGET_OBJECTS:TensorParallelReluFfnLayer>
+#   $<TARGET_OBJECTS:TensorParallelUnfusedAttentionLayer>
+#   $<TARGET_OBJECTS:TopKSamplingLayer>
+#   $<TARGET_OBJECTS:TopPSamplingLayer>
+#   $<TARGET_OBJECTS:TransformerTritonBackend>
+#   $<TARGET_OBJECTS:UnfusedAttentionLayer>
+#   $<TARGET_OBJECTS:activation_int8_kernels>
+#   $<TARGET_OBJECTS:activation_kernels>
+#   $<TARGET_OBJECTS:add_bias_transpose_kernels>
+#   $<TARGET_OBJECTS:add_residual_kernels>
+#   $<TARGET_OBJECTS:ban_bad_words>
+#   $<TARGET_OBJECTS:beam_search_penalty_kernels>
+#   $<TARGET_OBJECTS:beam_search_topk_kernels>
+#   $<TARGET_OBJECTS:bert_preprocess_kernels>
+#   $<TARGET_OBJECTS:calibrate_quantize_weight_kernels>
+#   $<TARGET_OBJECTS:cublasAlgoMap>
+#   $<TARGET_OBJECTS:cublasMMWrapper>
+#   $<TARGET_OBJECTS:cuda_driver_wrapper>
+#   $<TARGET_OBJECTS:cuda_utils>
+#   $<TARGET_OBJECTS:custom_ar_comm>
+#   $<TARGET_OBJECTS:custom_ar_kernels>
+#   $<TARGET_OBJECTS:cutlass_heuristic>
+#   $<TARGET_OBJECTS:cutlass_preprocessors>
+#   $<TARGET_OBJECTS:decoder_masked_multihead_attention>
+#   $<TARGET_OBJECTS:decoding_kernels>
+#   $<TARGET_OBJECTS:fpA_intB_gemm>
+#   $<TARGET_OBJECTS:gen_relative_pos_bias>
+#   $<TARGET_OBJECTS:gpt_kernels>
+#   $<TARGET_OBJECTS:int8_gemm>
+#   $<TARGET_OBJECTS:layernorm_int8_kernels>
+#   $<TARGET_OBJECTS:layernorm_kernels>
+#   $<TARGET_OBJECTS:layout_transformer_int8_kernels>
+#   $<TARGET_OBJECTS:logprob_kernels>
+#   $<TARGET_OBJECTS:logger>
+#   $<TARGET_OBJECTS:longformer_kernels>
+#   $<TARGET_OBJECTS:matrix_transpose_kernels>
+#   $<TARGET_OBJECTS:matrix_vector_multiplication>
+#   $<TARGET_OBJECTS:memory_utils>
+#   $<TARGET_OBJECTS:moe_gemm_kernels>
+#   $<TARGET_OBJECTS:moe_kernels>
+#   $<TARGET_OBJECTS:mpi_utils>
+#   $<TARGET_OBJECTS:nccl_utils>
+#   $<TARGET_OBJECTS:nvtx_utils>
+#   $<TARGET_OBJECTS:online_softmax_beamsearch_kernels>
+#   $<TARGET_OBJECTS:quantization_int8_kernels>
+#   $<TARGET_OBJECTS:sampling_penalty_kernels>
+#   $<TARGET_OBJECTS:sampling_topk_kernels>
+#   $<TARGET_OBJECTS:sampling_topp_kernels>
+#   $<TARGET_OBJECTS:softmax_int8_kernels>
+#   $<TARGET_OBJECTS:stop_criteria>
+#   $<TARGET_OBJECTS:tensor>
+#   $<TARGET_OBJECTS:transpose_int8_kernels>
+#   $<TARGET_OBJECTS:trt_fused_multi_head_attention>
+#   $<TARGET_OBJECTS:unfused_attention_kernels>
+#   $<TARGET_OBJECTS:word_list>
+# )
 
-if (BUILD_MULTI_GPU)
-target_link_libraries(transformer-shared PUBLIC
-  -lmpi
-  ${NCCL_LIBRARIES}
-)
-endif()
+# if (BUILD_MULTI_GPU)
+# target_link_libraries(transformer-shared PUBLIC
+#   -lmpi
+#   ${NCCL_LIBRARIES}
+# )
+# endif()
 
-if(USE_NVTX)
-target_link_libraries(transformer-shared PUBLIC
-  -lnvToolsExt
-)
-endif()
+# if(USE_NVTX)
+# target_link_libraries(transformer-shared PUBLIC
+#   -lnvToolsExt
+# )
+# endif()
   
-if (ENABLE_FP8)
-target_link_libraries(transformer-shared PUBLIC 
-  $<TARGET_OBJECTS:BertFP8>
-  $<TARGET_OBJECTS:BertFP8Weight>
-  $<TARGET_OBJECTS:DecoderSelfAttentionFP8Layer>
-  $<TARGET_OBJECTS:FfnFP8Layer>
-  $<TARGET_OBJECTS:GptContextAttentionFP8Layer>
-  $<TARGET_OBJECTS:GptFP8>
-  $<TARGET_OBJECTS:GptFP8ContextDecoder>
-  $<TARGET_OBJECTS:GptFP8Decoder>
-  $<TARGET_OBJECTS:GptFP8DecoderLayerWeight>
-  $<TARGET_OBJECTS:ParallelGptFP8TritonBackend>
-  $<TARGET_OBJECTS:GptFP8Weight>
-  $<TARGET_OBJECTS:SelfAttentionFP8Layer>
-  $<TARGET_OBJECTS:TensorParallelDecoderSelfAttentionFP8Layer>
-  $<TARGET_OBJECTS:TensorParallelGeluFfnFP8Layer>
-  $<TARGET_OBJECTS:TensorParallelGptContextAttentionFP8Layer>
-  $<TARGET_OBJECTS:activation_fp8_kernels>
-  $<TARGET_OBJECTS:cublasFP8MMWrapper>
-  $<TARGET_OBJECTS:cuda_fp8_utils>
-  $<TARGET_OBJECTS:fp8_qgmma_1x1_utils>
-  $<TARGET_OBJECTS:layernorm_fp8_kernels>
-  $<TARGET_OBJECTS:unfused_attention_fp8_kernels>
-)
-endif()
+# if (ENABLE_FP8)
+# target_link_libraries(transformer-shared PUBLIC 
+#   $<TARGET_OBJECTS:BertFP8>
+#   $<TARGET_OBJECTS:BertFP8Weight>
+#   $<TARGET_OBJECTS:DecoderSelfAttentionFP8Layer>
+#   $<TARGET_OBJECTS:FfnFP8Layer>
+#   $<TARGET_OBJECTS:GptContextAttentionFP8Layer>
+#   $<TARGET_OBJECTS:GptFP8>
+#   $<TARGET_OBJECTS:GptFP8ContextDecoder>
+#   $<TARGET_OBJECTS:GptFP8Decoder>
+#   $<TARGET_OBJECTS:GptFP8DecoderLayerWeight>
+#   $<TARGET_OBJECTS:ParallelGptFP8TritonBackend>
+#   $<TARGET_OBJECTS:GptFP8Weight>
+#   $<TARGET_OBJECTS:SelfAttentionFP8Layer>
+#   $<TARGET_OBJECTS:TensorParallelDecoderSelfAttentionFP8Layer>
+#   $<TARGET_OBJECTS:TensorParallelGeluFfnFP8Layer>
+#   $<TARGET_OBJECTS:TensorParallelGptContextAttentionFP8Layer>
+#   $<TARGET_OBJECTS:activation_fp8_kernels>
+#   $<TARGET_OBJECTS:cublasFP8MMWrapper>
+#   $<TARGET_OBJECTS:cuda_fp8_utils>
+#   $<TARGET_OBJECTS:fp8_qgmma_1x1_utils>
+#   $<TARGET_OBJECTS:layernorm_fp8_kernels>
+#   $<TARGET_OBJECTS:unfused_attention_fp8_kernels>
+# )
+# endif()
 
-set_target_properties(transformer-shared PROPERTIES POSITION_INDEPENDENT_CODE ON)
-set_target_properties(transformer-shared PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
-set_target_properties(transformer-shared PROPERTIES LINKER_LANGUAGE CXX)
-target_link_libraries(transformer-shared PUBLIC -lcudart -lcublas -lcublasLt -lcurand)
+# set_target_properties(transformer-shared PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# set_target_properties(transformer-shared PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
+# set_target_properties(transformer-shared PROPERTIES LINKER_LANGUAGE CXX)
+# target_link_libraries(transformer-shared PUBLIC -lcudart -lcublas -lcublasLt -lcurand)
 
 include(GNUInstallDirs)
 set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/FasterTransformer)
@@ -476,31 +476,31 @@ install(
   DESTINATION ${INSTALL_CONFIGDIR}
 )
 
-install(
-  TARGETS
-    transformer-shared
-  EXPORT
-    transformer-shared-targets
-  LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/fastertransformer
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/fastertransformer
-)
+# install(
+#   TARGETS
+#     transformer-shared
+#   EXPORT
+#     transformer-shared-targets
+#   LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/fastertransformer
+#   ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/fastertransformer
+# )
 
-install(
-  EXPORT
-    transformer-shared-targets
-  FILE
-    FasterTransformerTargets.cmake
-  DESTINATION
-    ${INSTALL_CONFIGDIR}
-)
+# install(
+#   EXPORT
+#     transformer-shared-targets
+#   FILE
+#     FasterTransformerTargets.cmake
+#   DESTINATION
+#     ${INSTALL_CONFIGDIR}
+# )
 
-export(
-  EXPORT
-    transformer-shared-targets
-  FILE
-    ${CMAKE_CURRENT_BINARY_DIR}/FasterTransformerTargets.cmake
-  NAMESPACE
-    TritonCore::
-)
+# export(
+#   EXPORT
+#     transformer-shared-targets
+#   FILE
+#     ${CMAKE_CURRENT_BINARY_DIR}/FasterTransformerTargets.cmake
+#   NAMESPACE
+#     TritonCore::
+# )
 
 export(PACKAGE FasterTransformer)

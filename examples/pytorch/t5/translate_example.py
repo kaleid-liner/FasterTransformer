@@ -317,7 +317,7 @@ def translate(args_dict):
                                 encoder_config.d_model, remove_padding, encoder_config.num_layers,
                                 encoder_config.relative_attention_num_buckets, encoder_config.num_experts, encoder_config.moe_layer_index,
                                 128, False, q_scaling, tensor_para_size, pipeline_para_size, t5_with_bias,
-                                position_embedding_type, moe_k=1,
+                                position_embedding_type, moe_k=topk,
                                 activation_type=activation_type,)
         ft_decoding = FTT5Decoding(ft_decoding_weight.w, lib_path,
                                 decoder_config.num_heads, decoder_config.d_kv,
@@ -329,7 +329,7 @@ def translate(args_dict):
                                 decoder_config.relative_attention_num_buckets, decoder_config.num_experts, decoder_config.moe_layer_index, max_distance=128,
                                 tensor_para_size=tensor_para_size, pipeline_para_size=pipeline_para_size,
                                 t5_with_bias=t5_with_bias,
-                                position_embedding_type=position_embedding_type, moe_k=1,
+                                position_embedding_type=position_embedding_type, moe_k=topk,
                                 activation_type=activation_type, tie_word_embeddings=tie_word_embeddings,)
 
         ft_t5 = FTT5(ft_encoder, ft_decoding)
@@ -347,8 +347,10 @@ def translate(args_dict):
         start_time = datetime.now()
         while prev < len(src_text):
             input_texts = src_text[prev:prev+batch_size]
+            print("hello ", input_texts)
             prev += batch_size
             input_token = tokenizer(input_texts, return_tensors='pt', padding=True)
+            print(input_token.input_ids.shape)
 
             print(f"{prev}/{len(src_text)}, moe = {t5_with_moe}")
             # An example to prevent generating "Chef"

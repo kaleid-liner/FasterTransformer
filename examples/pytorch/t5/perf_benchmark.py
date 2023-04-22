@@ -270,6 +270,7 @@ def translate(args_dict):
 
         # This script assumes fixed sequence length, so using remove_padding will not benefit.
         remove_padding = False
+        print("perf_benchmark topk = ", topk)
         ft_encoder = FTT5Encoder(ft_encoder_weight.w, lib_path, encoder_config.num_heads,
                                 encoder_config.d_kv, encoder_config.d_ff,
                                 encoder_config.d_model, remove_padding, encoder_config.num_layers,

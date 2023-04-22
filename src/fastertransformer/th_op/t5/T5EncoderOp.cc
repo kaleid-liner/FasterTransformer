@@ -60,6 +60,7 @@ FTT5Encoder<T>::FTT5Encoder(int64_t                        head_num,
 {
     bool use_gated_activation = isGatedActivation(_activation_type);
     FT_LOG_DEBUG(__PRETTY_FUNCTION__);
+    FT_LOG_ERROR("T5EncoderOp.cc: topk = %d", _moe_k);
 
     ft::ftNcclInitialize(tensor_para_, pipeline_para_, tensor_para_size, pipeline_para_size);
 

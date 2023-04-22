@@ -192,16 +192,15 @@ private:
     MoeGemmRunner<T, WeightType> moe_gemm_runner_;
 
     // Pointers
-    int*  source_rows_;
-    int*  permuted_rows_;
-    int*  permuted_experts_;
+    int*  source_rows_; // [k * num_rows]
+    int*  permuted_rows_; // [k * num_rows]
+    int*  permuted_experts_; // [k * num_rows]
     char* sorter_ws_;
-    T*    permuted_data_;
+    T*    permuted_data_; // [k * num_rows * hidden_size]
     T*    softmax_out_;
+    int64_t* total_rows_before_expert_; // num_experts
 
-    int64_t* total_rows_before_expert_;
-
-    T* fc1_result_;
+    T* fc1_result_; // k * num_rows * inter_size
 };
 
 template<typename WeightType>

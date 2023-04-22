@@ -58,7 +58,7 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
     allocateBuffer(input_tensors->at("ffn_input").shape[0], moe_k, use_moe);
 
     const int m             = input_tensors->at("ffn_input").shape[0];
-    T*        output_tensor = output_tensors->at("ffn_output").getPtr<T>();
+    T*        output_tensor = output_tensors->at("ffn_output").getPtr<T>(); // moe_k_ * h_token_num, d_model_
     const T*  input_tensor  = input_tensors->at("ffn_input").getPtr<const T>();
 
     // for moe output
@@ -96,15 +96,16 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
 
         cublas_wrapper_->Gemm(CUBLAS_OP_N,
                               CUBLAS_OP_N,
-                              expert_num_,
-                              m,
-                              hidden_units_,
-                              ffn_weights->gating_weight.kernel,
-                              expert_num_,
-                              input_tensor,
-                              hidden_units_,
-                              moe_gates_buf_,
-                              expert_num_);
+                              expert_num_,      // m
+                              m,                // n
+                              hidden_units_,    // k
+                              ffn_weights->gating_weight.kernel,    // A[hidden_units，expert_num]
+                              expert_num_,                          // lda
+                              input_tensor,                         // B[m, hidden_units]
+                              hidden_units_,                        // ldb
+                              moe_gates_buf_,                       // C[m, expert_num]
+                              expert_num_);                         // ldc
+        
         FT_LOG_TRACE("=== milestones 101 === %d", int8_mode_);
 
         if (int8_mode_ == 0) {
@@ -123,10 +124,10 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
                                        expert_num_,
                                        moe_k,
                                        moe_fc_workspace_,
-                                       output_tensor,
+                                       output_tensor, // moe_k_ * h_token_num, d_model_
                                        expert_scales,
-                                       permuted_rows,
-                                       permuted_experts,
+                                       permuted_rows, // h_token_num, moe_k_
+                                       permuted_experts, // h_token_num, moe_k_
                                        stream_);
             FT_LOG_TRACE("=== milestones 102");
         }
