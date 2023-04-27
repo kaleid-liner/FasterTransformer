@@ -28,12 +28,18 @@
 #include "src/fastertransformer/utils/memory_utils.h"
 #include <stdint.h>
 #include <vector>
+#include "src/fastertransformer/utils/fetcher.h"
 
 namespace fastertransformer {
 
 template<typename T>
 class FfnLayer: public BaseLayer {
 private:
+    // LLM on Client Device: prefetcher
+    std::shared_ptr<Fetcher<T>> intermediate_weight_fetcher;
+    std::shared_ptr<Fetcher<T>> output_weight_fetcher;
+    int* last_expert_for_source_row; // on GPU buffer
+
     // buffer handling
     size_t max_token_num_ = 0;
 
@@ -126,6 +132,8 @@ public:
                          const std::vector<fastertransformer::Tensor>* input_tensors,
                          const FfnWeight<T>*                           ffn_weights);
     virtual void forward(TensorMap* output_tensors, TensorMap* input_tensors, const FfnWeight<T>* ffn_weights);
+
+    virtual void reset_fetcher();
 };
 
 template<typename T>

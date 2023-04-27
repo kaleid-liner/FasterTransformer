@@ -26,7 +26,7 @@ add_subdirectory(sampling_layers)
 add_library(FfnLayer STATIC FfnLayer.cc)
 set_property(TARGET FfnLayer PROPERTY POSITION_INDEPENDENT_CODE  ON)
 set_property(TARGET FfnLayer PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
-target_link_libraries(FfnLayer PUBLIC -lcublas -lcudart cublasMMWrapper activation_kernels transpose_int8_kernels memory_utils matrix_vector_multiplication tensor moe_kernels fpA_intB_gemm int8_gemm nvtx_utils)
+target_link_libraries(FfnLayer PUBLIC -lcublas -lcudart cublasMMWrapper activation_kernels transpose_int8_kernels memory_utils matrix_vector_multiplication tensor moe_kernels fpA_intB_gemm int8_gemm nvtx_utils fetcher)
 
 add_library(FfnLayerINT8 STATIC FfnLayerINT8.cc)
 set_property(TARGET FfnLayerINT8 PROPERTY POSITION_INDEPENDENT_CODE  ON)

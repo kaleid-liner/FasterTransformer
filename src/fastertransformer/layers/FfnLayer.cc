@@ -20,6 +20,14 @@
 
 namespace fastertransformer {
 
+
+template<typename T>
+void FfnLayer<T>::reset_fetcher() {
+    // TODO:
+    // intermediate_weight_fetcher.reset();
+    // output_weight_fetcher.reset();
+}
+
 template<typename T>
 void FfnLayer<T>::forward(std::vector<fastertransformer::Tensor>*       output_tensors,
                           const std::vector<fastertransformer::Tensor>* input_tensors,
@@ -491,6 +499,11 @@ void FfnLayer<T>::allocateBuffer(size_t token_num, int moe_k, bool use_moe)
         }
 
         moe_fc_workspace_ = (char*)allocator_->reMalloc(moe_fc_workspace_, sizeof(char) * ws_size_moe, false);
+
+        // fetcher
+        // TODO:
+        // this->intermediate_weight_fetcher = std::make_shared<Fetcher<T>>(hidden_units_ * inter_size_, expert_num_);
+        // this->output_weight_fetcher = std::make_shared<Fetcher<T>>(inter_size_ * hidden_units_, expert_num_);
     }
     else {
         const auto type_size = int8_mode_ == 2 ? sizeof(int8_t) : sizeof(T);

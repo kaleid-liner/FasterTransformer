@@ -103,3 +103,9 @@ add_library(tensor STATIC Tensor.cc)
 set_property(TARGET tensor PROPERTY POSITION_INDEPENDENT_CODE  ON)
 set_property(TARGET tensor PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
 target_link_libraries(tensor PUBLIC cuda_utils logger)
+
+
+add_library(fetcher STATIC fetcher.cc)
+set_property(TARGET fetcher PROPERTY POSITION_INDEPENDENT_CODE  ON)
+set_property(TARGET fetcher PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
+target_link_libraries(fetcher PUBLIC cuda_utils logger)

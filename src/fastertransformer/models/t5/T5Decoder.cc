@@ -376,7 +376,10 @@ void T5Decoder<T>::forward(std::vector<Tensor>*                         output_t
     FT_CHECK(output_tensors->size() == 5 || output_tensors->size() == 6);
     isValidBatchSize(input_tensors->at(0).shape[0]);
     const size_t local_batch_size = input_tensors->at(0).shape[0];
+    // FT_LOG_ERROR("decoding local_batch_size = %d", local_batch_size);
+
     allocateBuffer(local_batch_size);
+    ffn_layer_->reset_fetcher();
 
     const size_t   mem_max_seq_len = input_tensors->at(1).shape[1];
     const uint     ite             = input_tensors->at(7).getVal<uint>();

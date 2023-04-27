@@ -946,7 +946,7 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
                     // attn_out_buf_.
                     FT_LOG_ERROR("=== finalize_moe_routing_kernelLauncher");
                     FT_LOG_ERROR("expert_scales_ %x", expert_scales_);
-                    printMatrix(expert_scales_, h_token_num, moe_k_, moe_k_, true);
+                    // printMatrix(expert_scales_, h_token_num, moe_k_, moe_k_, true);
                     finalize_moe_routing_kernelLauncher(fc2_result_,        // [moe_k * h_token_num, d_model_], input
                                                         out_tensor,         // [h_token_num, d_model_], output
                                                         attn_out_buf_,      // [h_token_num, d_model_], input

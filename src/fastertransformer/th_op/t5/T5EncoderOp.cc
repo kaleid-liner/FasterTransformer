@@ -145,6 +145,29 @@ FTT5Encoder<T>::FTT5Encoder(int64_t                        head_num,
 
         if (std::find(moe_layer_index.begin(), moe_layer_index.end(), i) == moe_layer_index.end()) {
             dense_weight_index += 1;
+            // copy the weights of FFN to GPU memory
+            // For encoder_layer_weights->ffn_weights_.intermediate_weight.kernel
+            // and encoder_layer_weights->ffn_weights_.output_weight.kernel
+
+            T *gpu_buffer;
+            fastertransformer::check_cuda_error(
+                cudaMalloc((void**)&gpu_buffer, _d_model * _inter_size * sizeof(T)));
+
+            fastertransformer::check_cuda_error(cudaMemcpy(gpu_buffer,
+                       encoder_layer_weights->ffn_weights_.intermediate_weight.kernel,
+                       _d_model * _inter_size * sizeof(T), cudaMemcpyHostToDevice));
+            
+            encoder_layer_weights->ffn_weights_.intermediate_weight.kernel = gpu_buffer;
+
+
+            fastertransformer::check_cuda_error(
+                cudaMalloc((void**)&gpu_buffer, _inter_size * _d_model * sizeof(T)));
+            
+            fastertransformer::check_cuda_error(cudaMemcpy(gpu_buffer,
+                       encoder_layer_weights->ffn_weights_.output_weight.kernel,
+                       _inter_size * _d_model * sizeof(T), cudaMemcpyHostToDevice));
+
+            encoder_layer_weights->ffn_weights_.output_weight.kernel = gpu_buffer;
         }
 
         if (std::find(moe_layer_index.begin(), moe_layer_index.end(), i) != moe_layer_index.end()) {
@@ -403,9 +426,11 @@ FasterTransformerT5Encoder::FasterTransformerT5Encoder(th::Tensor           attr
     CHECK_INPUT(v_kernel, _st);                                 // d_model, hidden_dim
     CHECK_INPUT(attr_output_kernel, _st);                       // hidden_dim, d_model
     CHECK_INPUT(attr_output_layernorm_gamma, _st);              // d_model
-    CHECK_INPUT(inter_kernel, _st);                             // d_model, inter_size
+    // this is not allocated in GPU memory now.
+    // CHECK_INPUT(inter_kernel, _st);                             // d_model, inter_size
     CHECK_INPUT(inter_kernel2, _st);                            // d_model, inter_size
-    CHECK_INPUT(output_kernel, _st);                            // inter_size, d_model
+    // this is not allocated in GPU memory now.
+    // CHECK_INPUT(output_kernel, _st);                            // inter_size, d_model
     CHECK_INPUT(output_layernorm_gamma, _st);                   // d_model
     CHECK_INPUT(post_transformer_layernorm_gamma, _st);         // d_model
     CHECK_INPUT(absolute_or_relative_position_embedding, _st);  // head_num, num_bucket or max_seq_len, d_model

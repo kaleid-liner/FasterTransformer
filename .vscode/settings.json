@@ -82,6 +82,17 @@
         "locale": "cpp",
         "__hash_table": "cpp",
         "__tree": "cpp",
-        "valarray": "cpp"
+        "valarray": "cpp",
+        "any": "cpp",
+        "__locale": "cpp",
+        "__threading_support": "cpp",
+        "__bit_reference": "cpp"
+    },
+    "search.exclude": {
+        "docker_mount/"    :true,
+    },
+
+    "files.exclude": {
+        "docker_mount/"    :true,
     }
 }
