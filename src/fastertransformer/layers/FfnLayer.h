@@ -35,10 +35,7 @@ namespace fastertransformer {
 template<typename T>
 class FfnLayer: public BaseLayer {
 private:
-    // LLM on Client Device: prefetcher
-    std::shared_ptr<Fetcher<T>> intermediate_weight_fetcher;
-    std::shared_ptr<Fetcher<T>> output_weight_fetcher;
-    int* last_expert_for_source_row; // on GPU buffer
+    std::shared_ptr<FetcherContext<T>> fetcher_context_ = nullptr;
 
     // buffer handling
     size_t max_token_num_ = 0;
@@ -133,7 +130,13 @@ public:
                          const FfnWeight<T>*                           ffn_weights);
     virtual void forward(TensorMap* output_tensors, TensorMap* input_tensors, const FfnWeight<T>* ffn_weights);
 
+    // called in T5Decoder and TODO: T5Encoder
     virtual void reset_fetcher();
+    virtual void initFetcherContext(int mode, int moe_k);
+
+    const FfnWeight<T> *ffn_weights_of_the_next_moe_layer_ = nullptr;   // for prefetch
+                                                                        // TODO: need to be assigned in T5Encoder and T5Decoder
+
 };
 
 template<typename T>

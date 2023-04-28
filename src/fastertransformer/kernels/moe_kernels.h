@@ -18,6 +18,7 @@
 #include "cutlass/gemm/gemm.h"
 #include "src/fastertransformer/kernels/cutlass_kernels/moe_gemm/moe_gemm_kernels.h"
 #include <cuda_runtime_api.h>
+#include "src/fastertransformer/utils/fetcher.h"
 
 namespace fastertransformer {
 
@@ -131,6 +132,8 @@ public:
     size_t getWorkspaceSize(
         const int num_rows, const int hidden_size, const int inter_size, const int num_experts, const int k);
 
+    void setFetcherContext(FetcherContext<WeightType, T> *fetcher_ctx);
+
     void run_moe_fc(const T*          input_activations,
                     const T*          gating_output,
                     const WeightType* fc1_expert_weights,
@@ -142,7 +145,7 @@ public:
                     const int         num_rows,
                     const int         hidden_size,
                     const int         inter_size,
-                    const int         num_experts,
+                          int         num_experts,
                     const int         k,
                     char*             workspace_ptr,
                     T*                fc2_result,
@@ -162,7 +165,7 @@ public:
                     const int         num_rows,
                     const int         hidden_size,
                     const int         inter_size,
-                    const int         num_experts,
+                          int         num_experts,
                     const int         k,
                     char*             workspace_ptr,
                     T*                fc2_result,
@@ -201,6 +204,9 @@ private:
     int64_t* total_rows_before_expert_; // num_experts
 
     T* fc1_result_; // k * num_rows * inter_size
+
+    int *expert_for_source_row_backup_; // for moe prefetching
+    FetcherContext<WeightType, T> *fetcher_context = nullptr;
 };
 
 template<typename WeightType>

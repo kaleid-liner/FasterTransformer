@@ -297,6 +297,7 @@ def translate(args_dict):
     input_token = InputTokens(batch_size, input_seq_len, decoder_config.decoder_start_token_id, decoder_config.eos_token_id, decoder_config.vocab_size)
 
     for i in range(len(translation_result_list)):
+        print(f"perf_benchmark.py: task{i}")
         sys.stdout.flush()
         is_warmup = (translation_result_list[i].name.find("warmup") != -1)
         min_duration = infer_duration if not is_warmup else 0
@@ -306,7 +307,8 @@ def translate(args_dict):
         start_time = datetime.now()
         while iter_idx < min_iterations or (datetime.now() - start_time).total_seconds() < min_duration:
             iter_idx += 1
-            print(f"{iter_idx}/{min_iterations}")
+            print(f"perf_benchmark.py: {iter_idx}/{min_iterations}")
+            sys.stdout.flush()
             if translation_result_list[i].frame_work == "HF":
                 if translation_result_list[i].name.find("beamsearch") != -1:
                     hf_outputs = t5_model.generate(input_token.input_ids.to("cuda"),

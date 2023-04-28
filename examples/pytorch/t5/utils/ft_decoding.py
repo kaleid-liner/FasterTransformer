@@ -17,6 +17,7 @@ import torch.nn as nn
 import torch.distributed as dist
 import numpy as np
 import os
+import sys
 
 
 class FTT5DecodingWeight(object):
@@ -108,7 +109,9 @@ class FTT5DecodingWeight(object):
             self.w.append(torch.zeros(1))
 
         for i in range(len(self.w)):
-            self.w[i] = self.w[i].contiguous().cuda()
+            self.w[i] = self.w[i].contiguous()
+            if i not in [9, 11]:
+                self.w[i] = self.w[i].cuda()
 
     def __init__(
             self,
@@ -594,11 +597,13 @@ class FTT5(nn.Module):
             mem_seq_len = input_token.seq_len.type(torch.int32).to("cuda")
 
         print("===== ft encoder forward start")
+        sys.stdout.flush()
 
         ft_encoder_outputs = self.encoder.forward(input_ids, mem_seq_len, inputs_embeds)
 
         print("===== ft encoder forward finished")
         print("===== ft decoder forward start")
+        sys.stdout.flush()
         results = self.decoding.forward(beam_size,  # optional, can be None
                                         max_seq_len,
                                         top_k,  # optional, can be None

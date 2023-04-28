@@ -441,8 +441,13 @@ public:
     {
         FT_LOG_DEBUG(__PRETTY_FUNCTION__);
         void* address = getAddress(*ptr);
+        if (pointer_mapping_->count(address) == 0) {
+            FT_LOG_ERROR("free buffer %p failed", address);
+            exit(0);
+        }
         pointer_mapping_->erase(address);
         *ptr = nullptr;
+        FT_LOG_DEBUG("freed");
         return;
     }
 

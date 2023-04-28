@@ -153,6 +153,26 @@ FTT5Decoding<T>::FTT5Decoding(int64_t                        head_num,
 
         if (std::find(moe_layer_index.begin(), moe_layer_index.end(), i) == moe_layer_index.end()) {
             dense_weight_index += 1;
+
+
+            T *gpu_buffer;
+            fastertransformer::check_cuda_error(
+                cudaMalloc((void**)&gpu_buffer, d_model * inter_size * sizeof(T)));
+
+            fastertransformer::check_cuda_error(cudaMemcpy(gpu_buffer,
+                       decoder_layer_weights->ffn_weights.intermediate_weight.kernel,
+                       d_model * inter_size * sizeof(T), cudaMemcpyHostToDevice));
+            
+            decoder_layer_weights->ffn_weights.intermediate_weight.kernel = gpu_buffer;
+
+
+            fastertransformer::check_cuda_error(
+                cudaMalloc((void**)&gpu_buffer, inter_size * d_model * sizeof(T)));
+            
+            fastertransformer::check_cuda_error(cudaMemcpy(gpu_buffer,
+                       decoder_layer_weights->ffn_weights.output_weight.kernel,
+                       inter_size * d_model * sizeof(T), cudaMemcpyHostToDevice));
+            decoder_layer_weights->ffn_weights.output_weight.kernel = gpu_buffer;
         }
 
         if (std::find(moe_layer_index.begin(), moe_layer_index.end(), i) != moe_layer_index.end()) {
@@ -516,6 +536,7 @@ FasterTransformerT5Decoding::FasterTransformerT5Decoding(int64_t              he
             after_ffn_adapter_layernorm_gamma,
             after_ffn_adapter_layernorm_beta}
 {
+    // fastertransformer::Logger::getLogger().setLevel(fastertransformer::Logger::Level::TRACE);
     CHECK_INPUT(self_layernorm_gamma, _st);                     // layer_num, d_model
     CHECK_INPUT(self_kernel_q, _st);                            // layer_num, d_model, 3 * hidden_dim
     CHECK_INPUT(self_output_kernel, _st);                       // layer_num, hidden_dim, d_model
@@ -525,9 +546,9 @@ FasterTransformerT5Decoding::FasterTransformerT5Decoding(int64_t              he
     CHECK_INPUT(cross_kernel_v, _st);                           // layer_num, mem_d_model, hidden_dim
     CHECK_INPUT(cross_output_kernel, _st);                      // layer_num, hidden_dim, d_model
     CHECK_INPUT(ffn_layernorm_gamma, _st);                      // layer_num, d_model
-    CHECK_INPUT(inter_kernel, _st);                             // layer_num, d_model, inter_size
+    // CHECK_INPUT(inter_kernel, _st);                             // layer_num, d_model, inter_size
     CHECK_INPUT(inter_kernel2, _st);                            // layer_num, d_model, inter_size
-    CHECK_INPUT(output_kernel, _st);                            // layer_num, inter_size, d_model
+    // CHECK_INPUT(output_kernel, _st);                            // layer_num, inter_size, d_model
     CHECK_INPUT(decoding_gamma, _st);                           // d_model
     CHECK_INPUT(embedding_table, _st);                          // vocab_size, d_model
     CHECK_INPUT(lm_head, _st);                                  // d_model, vocab_size

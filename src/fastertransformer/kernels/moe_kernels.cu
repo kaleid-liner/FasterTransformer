@@ -31,6 +31,7 @@
 
 #include "src/fastertransformer/kernels/moe_kernels.h"
 #include "src/fastertransformer/utils/cuda_utils.h"
+#include "src/fastertransformer/utils/fetcher.h"
 
 #ifndef CUDART_VERSION
 #error CUDART_VERSION Undefined!
@@ -386,8 +387,19 @@ void topk_gating_softmax_launcher_helper(const T*     input,
     const int            num_blocks    = (num_warps + WARPS_PER_TB - 1) / WARPS_PER_TB;
 
     dim3 block_dim(WARP_SIZE, WARPS_PER_TB);
+    // print the args
+    FT_LOG_TRACE("topk_gating_softmax_launcher_helper kernel args: input: %x, \
+         finished: %x, output: %x, num_rows: %d, indices: %x, source_row: %x, k: %d",
+                 input,
+                 finished,
+                 output,
+                 num_rows,
+                 indices,
+                 source_row,
+                 k);
     topk_gating_softmax<T, VPT, EXPERTS, WARPS_PER_TB, BYTES_PER_LDG>
         <<<num_blocks, block_dim, 0, stream>>>(input, finished, output, num_rows, indices, source_row, k);
+    FT_LOG_TRACE("kernel finished");
 }
 
 template<typename T>
@@ -571,7 +583,8 @@ size_t CutlassMoeFCRunner<T, WeightType, Enable>::getWorkspaceSize(
 
     // softmax output, permuted_rows and permuted_experts have moved to outside of moe kernel, allocate them
     // in Encoder or Decoder before invoking FfnLayer forward.
-    size_t total_ws_bytes = 3 * num_moe_inputs * sizeof(int);  // source_rows_, permuted_rows_, permuted_experts_
+    size_t total_ws_bytes = 4 * num_moe_inputs * sizeof(int);  // source_rows_, permuted_rows_, permuted_experts_
+                        // + expert_for_source_row_backup_
     total_ws_bytes += buf_size * sizeof(T);                    // permuted_data
     total_ws_bytes += padded_experts * sizeof(int64_t);        // Hold total_rows_before_expert_
     total_ws_bytes += num_softmax_outs * sizeof(T);
@@ -602,7 +615,8 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::configure_ws_ptrs(
 
     source_rows_      = (int*)ws_ptr;
     permuted_rows_    = source_rows_ + num_moe_inputs;
-    permuted_experts_ = permuted_rows_ + num_moe_inputs;
+    expert_for_source_row_backup_ = permuted_rows_ + num_moe_inputs;
+    permuted_experts_ = expert_for_source_row_backup_ + num_moe_inputs;
     permuted_data_    = (T*)(permuted_experts_ + num_moe_inputs);
 
     total_rows_before_expert_ = (int64_t*)(permuted_data_ + buf_size);
@@ -618,6 +632,28 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::configure_ws_ptrs(
     }
 }
 
+
+__global__ void do_mapping(int *expert_for_source_row, int len, int *map) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < len) {
+        expert_for_source_row[idx] = map[expert_for_source_row[idx]];
+    }
+}
+
+void map_on(int *expert_for_source_row, int len, int *map) {
+    // expert_for_source_row and map is on GPU
+    int block_size = 256;
+    int grid_size = (len + block_size - 1) / block_size;
+    do_mapping<<<grid_size, block_size>>>(expert_for_source_row, len, map);
+}
+
+template<typename T, typename WeightType, typename Enable>
+void CutlassMoeFCRunner<T, WeightType, Enable>::setFetcherContext(
+    FetcherContext<WeightType, T> *fetcher_ctx) {
+
+    this->fetcher_context = fetcher_ctx;
+}
+
 template<typename T, typename WeightType, typename Enable>
 void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          input_activations,     // [num_rows, hidden_size]
                                                            const T*          gating_output,         // [num_rows, expert_nums]
@@ -630,7 +666,7 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
                                                            const int         num_rows,              // h_token_num
                                                            const int         hidden_size,
                                                            const int         inter_size,
-                                                           const int         num_experts,
+                                                                 int         num_experts,
                                                            const int         k,
                                                            char*             workspace_ptr,
                                                            T*                fc2_result,            // [num_rows, hidden_size]
@@ -685,6 +721,8 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
     FT_LOG_TRACE("num_rows: %d", num_rows);
     FT_LOG_TRACE("num_experts: %d", num_experts);
     FT_LOG_TRACE("k: %d", k);
+    FT_LOG_TRACE("expert_for_source_row: %x", expert_for_source_row);
+    FT_LOG_TRACE("source_rows_: %x", source_rows_);
     FT_LOG_TRACE("gating_output:");
     // printMatrix((T*)gating_output, min(10, num_rows), num_experts, num_experts, true);
     topk_gating_softmax_kernelLauncher<T>(gating_output,
@@ -698,8 +736,64 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
                                           k,
                                           stream);
     
-    { // LLM on Client Device
-        // get last fetching result
+
+
+    // for prefetch
+    bool prefetch_enable = false;
+    if (fetcher_context != nullptr) {
+        FT_LOG_TRACE("begin do fetching");
+        if (fetcher_context->mode == PREFETCH) {
+            // supopse each time we run topk_gating, we get the same source_rows_.
+            prefetch_enable = true;
+
+            if (fetcher_context->first_time == true) {
+                // for layer 1, we use the current routing, rather than the prvious one.
+                // load layer-1 weights.
+                const WeightType *layer_2_inter = fetcher_context->intermediate_w_src;
+                const WeightType *layer_2_output = fetcher_context->output_w_src;
+                const T *layer_2_bias = fetcher_context->intermediate_bias_src;
+
+                fetcher_context->intermediate_w_src = fc1_expert_weights;
+                fetcher_context->output_w_src = fc2_expert_weights;
+                fetcher_context->intermediate_bias_src = fc1_expert_biases;
+                
+                FT_LOG_DEBUG("=== start prefetch layer 1 ===");
+                fetcher_context->fetch(expert_for_source_row, num_rows * k);
+                fetcher_context->sync();
+                FT_LOG_DEBUG("=== prefetch layer 1 end ===");
+
+                // restore the source to layer 2, for next fetch();
+                fetcher_context->intermediate_w_src = layer_2_inter;
+                fetcher_context->output_w_src = layer_2_output;
+                fetcher_context->intermediate_bias_src = layer_2_bias;
+            } else {
+                fetcher_context->sync();
+            }
+
+            
+            num_experts = fetcher_context->active_experts_count;
+            fc1_expert_weights = fetcher_context->intermediate_dst;
+            fc2_expert_weights = fetcher_context->output_dst;
+            fc1_expert_biases = fetcher_context->intermediate_bias_dst;
+            
+
+            // set the expert_for_source_row points to the last layer's output backup.
+            // print all args for debug
+            FT_LOG_TRACE("expert_for_source_row_backup_ %x", expert_for_source_row_backup_);
+            FT_LOG_TRACE("expert_for_source_row_fetching %x", fetcher_context->expert_for_source_row_fetching);
+            FT_LOG_TRACE("sizeof(int) * num_rows * k = %d", sizeof(int) * num_rows * k);
+            check_cuda_error(cudaMemcpy(expert_for_source_row_backup_, 
+                fetcher_context->expert_for_source_row_fetching,
+                 sizeof(int) * num_rows * k, cudaMemcpyDeviceToDevice));
+            fetcher_context->fetch(expert_for_source_row, num_rows * k);
+            // now fetcher_context->expert_for_source_row_fetching is new.
+
+            expert_for_source_row = expert_for_source_row_backup_;
+            // the original expert_for_source_row is preserved for final_routing.
+        } else {
+            FT_LOG_ERROR("FETCH ON DEMAND is not implemented."); exit(0);
+        }
+        FT_LOG_TRACE("fetching finished");
     }
 
     FT_LOG_TRACE("expert_scales: %x", expert_scales);
@@ -766,6 +860,15 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
     check_cuda_error(cudaGetLastError());
 #endif
 
+    if (prefetch_enable) {
+        check_cuda_error(cudaMemcpy(expert_for_source_row_backup_, expert_for_source_row, 
+            sizeof(int) * num_rows * k, cudaMemcpyDeviceToDevice));
+        expert_for_source_row = expert_for_source_row_backup_;
+
+        map_on(expert_for_source_row, num_rows * k, fetcher_context->expert_sparse_idx);
+        map_on(permuted_experts_, num_rows * k, fetcher_context->expert_sparse_idx);
+    }
+
     const int expanded_active_expert_rows = k * active_rows;    
     FT_LOG_TRACE("=== compute_total_rows_before_expert ===");
     FT_LOG_TRACE("expanded_active_expert_rows: %d", expanded_active_expert_rows);
@@ -829,7 +932,7 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
                                                            const int         num_rows,
                                                            const int         hidden_size,
                                                            const int         inter_size,
-                                                           const int         num_experts,
+                                                                 int         num_experts,
                                                            const int         k,
                                                            char*             workspace_ptr,
                                                            T*                fc2_result,

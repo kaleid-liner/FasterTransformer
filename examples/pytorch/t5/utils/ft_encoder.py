@@ -118,9 +118,9 @@ class FTT5EncoderWeight(object):
         
 
         for i in range(len(self.w)):
-            self.w[i] = self.w[i].contiguous()
-            # if i not in [6,8]: # expert weights are not allocated in GPU memory now
-            self.w[i] = self.w[i].cuda()
+            self.w[i] = self.w[i].contiguous().cuda()
+            # if i not in [6,8]: # make expert weights not allocated in GPU memory
+            # self.w[i] = self.w[i].cuda()
 
     def __init__(
             self,

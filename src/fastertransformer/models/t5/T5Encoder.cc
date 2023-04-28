@@ -893,7 +893,7 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
             // FFN
             {
                 FT_LOG_TRACE("=== milestone 19");
-                FT_LOG_ERROR("h_token_num = %d, d_model_ = %d", h_token_num, d_model_);
+                FT_LOG_TRACE("h_token_num = %d, d_model_ = %d", h_token_num, d_model_);
                 TensorMap ffn_input_tensors(
                     {{"ffn_input",
                       Tensor{MEMORY_GPU,
@@ -913,7 +913,7 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
                 use_moe = std::find(moe_layer_index_.begin(), moe_layer_index_.end(), i) != moe_layer_index_.end();
                 if (use_moe) {
                     FT_LOG_TRACE("=== milestone 21");
-                    FT_LOG_ERROR("T5Encoder.cc 915 FFN forward: moe_k_ = %d", moe_k_);
+                    FT_LOG_TRACE("T5Encoder.cc 915 FFN forward: moe_k_ = %d", moe_k_);
                     ffn_input_tensors.insert("moe_k", Tensor{MEMORY_CPU, TYPE_INT32, {1}, &moe_k_});
                     FT_LOG_TRACE("moe_k_ * h_token_num, d_model_ = (%d * %d, %d), fc2_result %x", moe_k_, h_token_num, d_model_, fc2_result_);
                     ffn_output_tensors.insert(
@@ -944,8 +944,8 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
                     // residual addition for moe, we should pass the unnormed attention output if using pre_layernorm
                     // and pass the normed attention output if using post_layernorm. They all point to the
                     // attn_out_buf_.
-                    FT_LOG_ERROR("=== finalize_moe_routing_kernelLauncher");
-                    FT_LOG_ERROR("expert_scales_ %x", expert_scales_);
+                    FT_LOG_TRACE("=== finalize_moe_routing_kernelLauncher");
+                    FT_LOG_TRACE("expert_scales_ %x", expert_scales_);
                     // printMatrix(expert_scales_, h_token_num, moe_k_, moe_k_, true);
                     finalize_moe_routing_kernelLauncher(fc2_result_,        // [moe_k * h_token_num, d_model_], input
                                                         out_tensor,         // [h_token_num, d_model_], output

@@ -111,6 +111,8 @@ void T5Decoder<T>::initialize()
                                                        enable_custom_all_reduce_);
     }
 
+    ffn_layer_->initFetcherContext(PREFETCH, moe_k_);
+
     if (has_adapters()) {
         adapter_layer_ = new LinearAdapterLayer<T>(adapter_config_,
                                                    max_batch_size_,
@@ -378,8 +380,9 @@ void T5Decoder<T>::forward(std::vector<Tensor>*                         output_t
     const size_t local_batch_size = input_tensors->at(0).shape[0];
     // FT_LOG_ERROR("decoding local_batch_size = %d", local_batch_size);
 
+    FT_LOG_TRACE("==== milestone decoder 900");
     allocateBuffer(local_batch_size);
-    ffn_layer_->reset_fetcher();
+    ffn_layer_->reset_fetcher(); // 
 
     const size_t   mem_max_seq_len = input_tensors->at(1).shape[1];
     const uint     ite             = input_tensors->at(7).getVal<uint>();
@@ -400,6 +403,7 @@ void T5Decoder<T>::forward(std::vector<Tensor>*                         output_t
     const std::vector<size_t> mem_cache_shape = {
         local_batch_size, output_tensors->at(3).shape[2], output_tensors->at(3).shape[3]};
 
+    FT_LOG_TRACE("==== milestone decoder 910");
     const bool output_cross_attention = output_tensors->size() == 6;
     const uint max_seq_len            = output_cross_attention ? output_tensors->at(5).shape[4] : 0;
 
@@ -408,6 +412,7 @@ void T5Decoder<T>::forward(std::vector<Tensor>*                         output_t
             continue;
         }
 
+        FT_LOG_TRACE("==== milestone decoder 910 layer %d", l);
         T* decoder_input  = (l == 0) ? input_tensors->at(0).getPtr<T>() : decoder_layer_output_;
         T* decoder_output = (l == num_layer_ - 1) ? output_tensors->at(0).getPtr<T>() : decoder_layer_output_;
 
@@ -451,6 +456,7 @@ void T5Decoder<T>::forward(std::vector<Tensor>*                         output_t
         mem_cache_offset += ite_cache_offset;
 
         auto const& layer_weight = decoder_layer_weight->at(l);
+        FT_LOG_TRACE("==== milestone decoder 911");
         invokeGeneralT5LayerNorm(decoder_normed_input_,
                                  decoder_input,
                                  layer_weight->pre_layernorm_weights.gamma,
@@ -473,6 +479,7 @@ void T5Decoder<T>::forward(std::vector<Tensor>*                         output_t
             self_attention_input_tensors.insert("ia3_tasks", input_tensors->at(9));
         }
 
+        FT_LOG_TRACE("==== milestone decoder 912");
         TensorMap self_attention_output_tensors{
             {"hidden_features", Tensor{MEMORY_GPU, data_type, {local_batch_size, d_model_}, self_attn_output_}},
             {"key_cache",
@@ -496,6 +503,7 @@ void T5Decoder<T>::forward(std::vector<Tensor>*                         output_t
                 &input_tensor, &output_tensor, &layer_weight->adapter_weights_.after_attention_adapter_weights_);
         }
 
+        FT_LOG_TRACE("==== milestone decoder 930");
         invokeGeneralAddBiasResidualT5PreLayerNorm(self_attn_output_,
                                                    normed_self_attn_output_,
                                                    decoder_input,
@@ -535,9 +543,11 @@ void T5Decoder<T>::forward(std::vector<Tensor>*                         output_t
                        {local_batch_size, head_num_ / tensor_para_.world_size_, max_seq_len, mem_max_seq_len},
                        output_tensors->at(5).getPtrWithOffset<float>(cross_attentions_offset)});
         }
+        FT_LOG_TRACE("==== milestone decoder 939");
         cross_attention_layer_->forward(
             &cross_attention_output_tensors, &cross_attention_input_tensors, &layer_weight->cross_attention_weights);
 
+        FT_LOG_TRACE("==== milestone decoder 940");
         invokeGeneralAddBiasResidualT5PreLayerNorm(cross_attn_output_,
                                                    normed_cross_attn_output_,
                                                    self_attn_output_,
@@ -558,6 +568,7 @@ void T5Decoder<T>::forward(std::vector<Tensor>*                         output_t
 
         TensorMap ffn_output_tensors;
 
+        FT_LOG_TRACE("==== milestone decoder 941");
         bool use_moe = std::find(moe_layer_index_.begin(), moe_layer_index_.end(), l) != moe_layer_index_.end();
         if (use_moe) {
             ffn_input_tensors.insert("moe_k", Tensor{MEMORY_CPU, TYPE_UINT64, {1}, &moe_k_});
@@ -579,6 +590,21 @@ void T5Decoder<T>::forward(std::vector<Tensor>*                         output_t
         }
 
         FT_LOG_TRACE("==== milestone decoder 201");
+        if (use_moe) { 
+            FT_LOG_TRACE("==== milestone decoder 942");
+            // prefetch may use this
+            // give ffn layer the weigths of the next MoE layer to prefetch
+            ffn_layer_->ffn_weights_of_the_next_moe_layer_ = nullptr;
+
+            // search the next MoE layer
+            for (int i = l + 1; i < num_layer_; i++) {
+                if (std::find(moe_layer_index_.begin(), moe_layer_index_.end(), i) != moe_layer_index_.end()) {
+                    ffn_layer_->ffn_weights_of_the_next_moe_layer_ = &(decoder_layer_weight->at(i)->ffn_weights);
+                    break;
+                }
+            }
+        }
+        FT_LOG_TRACE("==== milestone decoder 943");
         ffn_layer_->forward(&ffn_output_tensors, &ffn_input_tensors, &layer_weight->ffn_weights);
         FT_LOG_TRACE("==== milestone decoder 202");
 

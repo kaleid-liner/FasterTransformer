@@ -23,9 +23,7 @@ namespace fastertransformer {
 
 template<typename T>
 void FfnLayer<T>::reset_fetcher() {
-    // TODO:
-    // intermediate_weight_fetcher.reset();
-    // output_weight_fetcher.reset();
+    fetcher_context_->first_time = true;
 }
 
 template<typename T>
@@ -118,6 +116,14 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
 
         if (int8_mode_ == 0) {
             FT_LOG_TRACE("=== milestones 101.5");
+            if (this->fetcher_context_.get() != nullptr) {
+                this->fetcher_context_->allocateBuffer(this->allocator_, m);
+                if (this->fetcher_context_->mode == PREFETCH)
+                    this->fetcher_context_->set_source(this->ffn_weights_of_the_next_moe_layer_);
+                FT_LOG_TRACE("=== milestones 101.6");
+                moe_fc_runner_->setFetcherContext(this->fetcher_context_.get());
+            }
+            FT_LOG_TRACE("=== milestones 101.7");
             moe_fc_runner_->run_moe_fc(input_tensor,
                                        moe_gates_buf_,
                                        ffn_weights->intermediate_weight.kernel,
@@ -140,6 +146,7 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
             FT_LOG_TRACE("=== milestones 102");
         }
         else if (int8_mode_ == 1) {
+            FT_LOG_ERROR("int8 mode not supported."); exit(0);
             FT_LOG_TRACE("=== milestones 103");
             FT_CHECK_WITH_INFO(moe_int8_weight_only_fc_runner_.get() != NULL,
                                "weight only runner was not initialized.");
@@ -480,6 +487,21 @@ void FfnLayer<T>::allocateBuffer()
 }
 
 template<typename T>
+void FfnLayer<T>::initFetcherContext(int mode, int moe_k) {
+    if (mode != 0) {
+        FT_LOG_DEBUG(" === create fetcher context for moe MODE %d", mode);
+        this->fetcher_context_ = std::make_shared<FetcherContext<T>>(
+            mode, 
+            expert_num_,
+            hidden_units_ * inter_size_,
+            inter_size_ * hidden_units_,
+            inter_size_);
+    } else {
+        this->fetcher_context_.reset();
+    }
+}
+
+template<typename T>
 void FfnLayer<T>::allocateBuffer(size_t token_num, int moe_k, bool use_moe)
 {
     FT_LOG_DEBUG(__PRETTY_FUNCTION__);
@@ -500,10 +522,6 @@ void FfnLayer<T>::allocateBuffer(size_t token_num, int moe_k, bool use_moe)
 
         moe_fc_workspace_ = (char*)allocator_->reMalloc(moe_fc_workspace_, sizeof(char) * ws_size_moe, false);
 
-        // fetcher
-        // TODO:
-        // this->intermediate_weight_fetcher = std::make_shared<Fetcher<T>>(hidden_units_ * inter_size_, expert_num_);
-        // this->output_weight_fetcher = std::make_shared<Fetcher<T>>(inter_size_ * hidden_units_, expert_num_);
     }
     else {
         const auto type_size = int8_mode_ == 2 ? sizeof(int8_t) : sizeof(T);
@@ -551,6 +569,7 @@ void FfnLayer<T>::freeBuffer()
 
         is_allocate_buffer_ = false;
     }
+    FT_LOG_TRACE(" __PRETTY_FUNCTION__ free");
 }
 
 #define INVOKE_GENERIC_ACT(ACT)                                                                                        \
