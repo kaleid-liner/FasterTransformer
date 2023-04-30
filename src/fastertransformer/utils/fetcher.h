@@ -41,7 +41,10 @@ private:
     size_t num_rows;
     size_t num_experts;
 
+    std::vector<void*> big_buffer_on_device;
+
     bool has_source = false;
+    bool buffer_allocated = false;
     IAllocator* allocator;
 public:
     cudaStream_t stream;
@@ -85,6 +88,8 @@ public:
 
     void allocateBuffer(IAllocator* allocator, size_t num_rows);
     void freeBuffer();
+    
+    void* mallocOnDeviceAligned(size_t size);
 };
 
 

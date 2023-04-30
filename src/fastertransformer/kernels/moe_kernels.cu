@@ -573,7 +573,7 @@ size_t CutlassMoeFCRunner<T, WeightType, Enable>::getWorkspaceSize(
     const int buf_size         = pad_to_multiple_of_16(k * num_rows * hidden_size);
     const int interbuf_size    = pad_to_multiple_of_16(k * num_rows * inter_size);
     const int padded_experts   = pad_to_multiple_of_16(num_experts);
-    const int num_moe_inputs   = pad_to_multiple_of_16(k * num_rows);
+    const int num_moe_inputs   = (128 + pad_to_multiple_of_16(k * num_rows));
     int       num_softmax_outs = 0;
 
     const bool is_pow_2 = (num_experts != 0) && ((num_experts & (num_experts - 1)) == 0);
@@ -610,7 +610,7 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::configure_ws_ptrs(
     const int buf_size       = pad_to_multiple_of_16(k * num_rows * hidden_size);
     const int interbuf_size  = pad_to_multiple_of_16(k * num_rows * inter_size);
     const int padded_experts = pad_to_multiple_of_16(num_experts);
-    const int num_moe_inputs = pad_to_multiple_of_16(k * num_rows);
+    const int num_moe_inputs = 128 + pad_to_multiple_of_16(k * num_rows);
     // const int num_softmax_outs = pad_to_multiple_of_16(num_rows * num_experts);
 
     source_rows_      = (int*)ws_ptr;
@@ -630,6 +630,9 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::configure_ws_ptrs(
     else {
         softmax_out_ = nullptr;
     }
+
+    // align expert_for_source_row_backup_ to 128 bytes
+    expert_for_source_row_backup_ = (int*)(((uintptr_t)expert_for_source_row_backup_ + 127) & ~127);
 }
 
 
@@ -782,11 +785,21 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
             FT_LOG_TRACE("expert_for_source_row_backup_ %x", expert_for_source_row_backup_);
             FT_LOG_TRACE("expert_for_source_row_fetching %x", fetcher_context->expert_for_source_row_fetching);
             FT_LOG_TRACE("sizeof(int) * num_rows * k = %d", sizeof(int) * num_rows * k);
+
+            // get start time
+            
+            auto start = std::chrono::high_resolution_clock::now();
             check_cuda_error(cudaMemcpy(expert_for_source_row_backup_, 
                 fetcher_context->expert_for_source_row_fetching,
                  sizeof(int) * num_rows * k, cudaMemcpyDeviceToDevice));
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+            extern int64_t expert_for_row_backup_time;
+            expert_for_row_backup_time += duration.count();
+
             fetcher_context->fetch(expert_for_source_row, num_rows * k);
             // now fetcher_context->expert_for_source_row_fetching is new.
+
 
             expert_for_source_row = expert_for_source_row_backup_;
             // the original expert_for_source_row is preserved for final_routing.
@@ -1281,5 +1294,46 @@ template void finalize_moe_routing_kernelLauncher(const __nv_bfloat16*,
                                                   const int,
                                                   cudaStream_t);
 #endif
+
+
+// __global__ void tag_all_actiavted_experts(
+//     int *expert_sparse_idx,
+//     const int *expert_for_source_row,
+//     const int num_rows) {
+
+//     int row = blockIdx.x;
+//     if (row < num_rows) {
+//         expert_sparse_idx[expert_for_source_row[row]] = 1;
+//     }
+// }
+
+// __global__ void prefix_sum_to_get_sparse_index(
+//     int *expert_sparse_idx,
+//     const int num_experts) {
+
+//     int tid = threadIdx.x;
+//     if (0 < tid && tid < num_experts) {
+//         expert_sparse_idx[tid] += expert_sparse_idx[tid - 1];
+//     }
+// }
+
+// void get_expert_sparse_idx_kernelLauncher(
+//     int *expert_sparse_idx,
+//     const int *expert_for_source_row,
+//     const int num_rows,
+//     const int num_experts,
+//     int *active_expert_count // cpu
+//     ) {
+    
+//     check_cuda_error(cudaMemset(expert_sparse_idx, 0, sizeof(int) * num_experts));
+        
+//     tag_all_actiavted_experts<<<1, num_rows>>>(
+//         expert_sparse_idx, 
+//         expert_for_source_row, 
+//         num_rows);
+//     prefix_sum_to_get_sparse_index<<<1, num_experts>>>
+//         (expert_sparse_idx, num_experts);
+// }
+
 
 }  // namespace fastertransformer

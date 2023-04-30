@@ -278,4 +278,13 @@ public:
     }
 };
 
+
+void get_expert_sparse_idx_kernelLauncher(
+    int *expert_sparse_idx,
+    const int *expert_for_source_row,
+    const int num_rows,
+    const int num_experts,
+    int *active_expert_count // cpu
+    );
+
 }  // namespace fastertransformer

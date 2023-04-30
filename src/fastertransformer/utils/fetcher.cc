@@ -8,6 +8,7 @@
 #include "cutlass/array.h"
 #include "cutlass/numeric_types.h"
 #include "src/fastertransformer/utils/cuda_utils.h"
+#include <chrono>
 
 
 namespace fastertransformer {
@@ -39,6 +40,10 @@ template class FetcherContext<uint8_t, __nv_bfloat16>;
 #endif
 
 
+int64_t calc_sparse_time = 0; // microseconds
+int64_t cpy_expert_array_to_cpu_time = 0;
+int64_t total_row_cpy = 0;
+
 // 1. copy to expert_for_source_row_fetching
 // 2. calc expert_sparse_idx_working
 // 3. launch fetch on the stream, from source to working
@@ -63,11 +68,25 @@ void FetcherContext<WeightT, BiasT>::fetch(int *next_expert_for_source_row, size
     // printMatrix(next_expert_for_source_row, 1, this->num_rows, this->num_rows, true);
 
     this->first_time = false;
-    {   // sparse indexing (CPU version)
+    // first copy it to the aligned buffer, and then send it back to the CPU
+    check_cuda_error(cudaMemcpy(this->expert_for_source_row_fetching, 
+        next_expert_for_source_row, sizeof(int) * this->num_rows, cudaMemcpyDeviceToDevice));
+    {   
+        // sparse indexing (CPU version)
         // copy all experts to the CPU buffer
-        check_cuda_error(cudaMemcpy(this->row_expert_sorting_buffer, 
-            next_expert_for_source_row, sizeof(int) * this->num_rows, cudaMemcpyDeviceToHost));
+        auto start = std::chrono::high_resolution_clock::now();
 
+        // printf("two pointer should be aligned %x %x\n", 
+        //     (size_t)(this->expert_for_source_row_fetching) % 128, 
+        //     (size_t)(this->row_expert_sorting_buffer) % 128);
+        // exit(0);
+        check_cuda_error(cudaMemcpy(this->row_expert_sorting_buffer, 
+            this->expert_for_source_row_fetching, sizeof(int) * this->num_rows, cudaMemcpyDeviceToHost));
+        total_row_cpy += this->num_rows;
+        auto end_time = std::chrono::high_resolution_clock::now();
+        cpy_expert_array_to_cpu_time += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start).count();
+
+        start = std::chrono::high_resolution_clock::now();
         FT_LOG_DEBUG("fetch milestone 0");
         std::sort(this->row_expert_sorting_buffer, this->row_expert_sorting_buffer + this->num_rows);
         // remove duplicates
@@ -75,23 +94,41 @@ void FetcherContext<WeightT, BiasT>::fetch(int *next_expert_for_source_row, size
 
         this->active_experts_count = end - this->row_expert_sorting_buffer;
 
-        memset(this->expert_sparse_idx_cpu, 0, sizeof(int) * this->num_rows);
+        memset(this->expert_sparse_idx_cpu, 0, sizeof(int) * this->num_experts);
         for (int i = 0; i < this->active_experts_count; i++) {
             this->expert_sparse_idx_cpu[this->row_expert_sorting_buffer[i]] = i;
         }
+        end_time = std::chrono::high_resolution_clock::now();
+        calc_sparse_time += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start).count();
 
         FT_LOG_DEBUG("fetch milestone 1");
         // copy to GPU
-        check_cuda_error(cudaMemcpy(this->expert_sparse_idx_working, 
-            this->expert_sparse_idx_cpu, sizeof(int) * this->num_experts, cudaMemcpyHostToDevice));
+        check_cuda_error(cudaMemcpyAsync(this->expert_sparse_idx_working, 
+            this->expert_sparse_idx_cpu, sizeof(int) * this->num_experts, 
+                cudaMemcpyHostToDevice, this->stream));
             
         FT_LOG_DEBUG("fetch milestone 2");
     }
- 
+
+    
+    // {   // sparse indexing (next_expert_for_source_row -> expert_sparse_index) gpu version
+    //     // call into moe_kernels.cu
+
+    //     //measure the time
+    //     auto start = std::chrono::high_resolution_clock::now();
+    //     get_expert_sparse_idx_kernelLauncher(this->expert_sparse_idx_working,
+    //          next_expert_for_source_row, 
+    //          this->num_rows, this->num_experts,
+    //          &this->active_expert_count);
+    //     auto end_time = std::chrono::high_resolution_clock::now();
+    //     // active_expert_count
+        
+    //     calc_sparse_time += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start).count();
+    // }
+    
+    // expert_for_source_row 
 
     // copy to expert_for_source_row_fetching, for next layer to get
-    check_cuda_error(cudaMemcpyAsync(this->expert_for_source_row_fetching, 
-        next_expert_for_source_row, sizeof(int) * this->num_rows, cudaMemcpyDeviceToDevice, this->stream));
 
     #ifdef FETCHER_DEBUG
         // sync the cuda stream for debug
@@ -127,7 +164,7 @@ void FetcherContext<WeightT, BiasT>::fetch(int *next_expert_for_source_row, size
         cudaStreamSynchronize(this->stream);
         FT_LOG_DEBUG("sych 2");
         #endif
-        
+
         check_cuda_error(cudaMemcpyAsync(this->intermediate_bias_working + i * this->intermediate_b_size_per_expert,
             this->intermediate_bias_src + expert * this->intermediate_b_size_per_expert, 
             sizeof(BiasT) * this->intermediate_b_size_per_expert, cudaMemcpyDeviceToDevice, this->stream));
@@ -143,11 +180,19 @@ void FetcherContext<WeightT, BiasT>::fetch(int *next_expert_for_source_row, size
 // finish previous job
 // update dst from working (swap them)
 // update expert_sparse_idx from expert_sparse_idx_working (swap them)
+
+int64_t fetcher_sync_wait_time = 0; // microseconds
+
 template<class WeightT, class BiasT> 
 void FetcherContext<WeightT, BiasT>::sync() {
     // sync the steam
     FT_LOG_TRACE("sync stream\n");
+    // get the millisec
+    auto start = std::chrono::high_resolution_clock::now();
     check_cuda_error(cudaStreamSynchronize(this->stream));
+    auto end = std::chrono::high_resolution_clock::now();
+    //add to fetcher_time
+    fetcher_sync_wait_time += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
     FT_LOG_TRACE("sync end");
 
     // update dst from working (swap them)
@@ -171,6 +216,8 @@ void FetcherContext<WeightT, BiasT>::set_source(const FfnWeight<WeightT, BiasT> 
     this->intermediate_w_src = w_of_the_layer_to_load->output_weight.kernel;
     this->intermediate_bias_src = w_of_the_layer_to_load->intermediate_weight.bias;
 }
+
+int64_t expert_for_row_backup_time = 0; // microseconds
 
 template<class WeightT, class BiasT> 
 FetcherContext<WeightT, BiasT>::~FetcherContext() {
@@ -196,20 +243,26 @@ FetcherContext<WeightT, BiasT>::FetcherContext(int mode, int num_experts,
 
 template<class WeightT, class BiasT> 
 void FetcherContext<WeightT, BiasT>::allocateBuffer(IAllocator* allocator, size_t num_rows) {
+    if (this->buffer_allocated == true) 
+        return;
+    this->buffer_allocated = true;
     this->num_rows = num_rows;
     // allocated all buffer
-    this->expert_for_source_row_fetching = (int*)
-        allocator->reMalloc(&this->expert_for_source_row_fetching, sizeof(int) * num_rows);
-    this->expert_sparse_idx = (int*)allocator->reMalloc(this->expert_sparse_idx, sizeof(int) * num_experts);
-    this->expert_sparse_idx_working = (int*)allocator->reMalloc(this->expert_sparse_idx_working, sizeof(int) * num_experts);
-    this->output_dst = (WeightT*)allocator->reMalloc(this->output_dst, sizeof(WeightT) * output_w_size_per_expert * num_experts);
-    this->intermediate_dst = (WeightT*)allocator->reMalloc(this->intermediate_dst, sizeof(WeightT) * intermediate_w_size_per_expert * num_experts);
-    this->intermediate_bias_dst = (BiasT*)allocator->reMalloc(this->intermediate_bias_dst, sizeof(BiasT) * intermediate_b_size_per_expert * num_experts);
-    this->output_working = (WeightT*)allocator->reMalloc(this->output_working, sizeof(WeightT) * output_w_size_per_expert * num_experts);
-    this->intermediate_working = (WeightT*)allocator->reMalloc(this->intermediate_working, sizeof(WeightT) * intermediate_w_size_per_expert * num_experts);
-    this->intermediate_bias_working = (BiasT*)allocator->reMalloc(this->intermediate_bias_working, sizeof(BiasT) * intermediate_b_size_per_expert * num_experts);
-    this->row_expert_sorting_buffer = (int*)allocator->reMalloc(this->row_expert_sorting_buffer, sizeof(int) * num_rows, false, true);
-    this->expert_sparse_idx_cpu = (int*)allocator->reMalloc(this->expert_sparse_idx_cpu, sizeof(int) * num_experts, false, true);
+    this->expert_for_source_row_fetching = (int*)this->mallocOnDeviceAligned(sizeof(int) * num_rows);
+    this->expert_sparse_idx = (int*)this->mallocOnDeviceAligned(sizeof(int) * num_experts);
+    this->expert_sparse_idx_working = (int*)this->mallocOnDeviceAligned(sizeof(int) * num_experts);
+    this->output_dst = (WeightT*)this->mallocOnDeviceAligned(sizeof(WeightT) * output_w_size_per_expert * num_experts);
+    this->intermediate_dst = (WeightT*)this->mallocOnDeviceAligned(sizeof(WeightT) * intermediate_w_size_per_expert * num_experts);
+    this->intermediate_bias_dst = (BiasT*)this->mallocOnDeviceAligned(sizeof(BiasT) * intermediate_b_size_per_expert * num_experts);
+    this->output_working = (WeightT*)this->mallocOnDeviceAligned(sizeof(WeightT) * output_w_size_per_expert * num_experts);
+    this->intermediate_working = (WeightT*)this->mallocOnDeviceAligned(sizeof(WeightT) * intermediate_w_size_per_expert * num_experts);
+    this->intermediate_bias_working = (BiasT*)this->mallocOnDeviceAligned(sizeof(BiasT) * intermediate_b_size_per_expert * num_experts);
+    // this->row_expert_sorting_buffer = (int*)allocator->reMalloc(this->row_expert_sorting_buffer, sizeof(int) * num_rows, false, true);
+    // this->expert_sparse_idx_cpu = (int*)allocator->reMalloc(this->expert_sparse_idx_cpu, sizeof(int) * num_experts, false, true);
+    check_cuda_error(cudaMallocHost(&this->row_expert_sorting_buffer, sizeof(int) * num_rows + 128));
+    row_expert_sorting_buffer = (int*)((void*)(((size_t)row_expert_sorting_buffer + 128 - 1) & ~(128 - 1)));
+    check_cuda_error(cudaMallocHost(&this->expert_sparse_idx_cpu, sizeof(int) * num_experts + 128));
+    expert_sparse_idx_cpu = (int*)((void*)(((size_t)expert_sparse_idx_cpu + 128 - 1) & ~(128 - 1)));
     this->allocator = allocator;
 }
 
@@ -231,18 +284,25 @@ void FetcherContext<WeightT, BiasT>::freeBuffer() {
     FT_LOG_DEBUG("free row_expert_sorting_buffer: %p", this->row_expert_sorting_buffer);
     FT_LOG_DEBUG("free expert_sparse_idx_cpu: %p", this->expert_sparse_idx_cpu);
 
-    allocator->free((void**)&this->expert_for_source_row_fetching);
-    allocator->free((void**)&this->expert_sparse_idx);
-    allocator->free((void**)&this->expert_sparse_idx_working);
-    allocator->free((void**)&this->output_dst);
-    allocator->free((void**)&this->intermediate_dst);
-    allocator->free((void**)&this->intermediate_bias_dst);
-    allocator->free((void**)&this->output_working);
-    allocator->free((void**)&this->intermediate_working);
-    allocator->free((void**)&this->intermediate_bias_working);
-    allocator->free((void**)&this->row_expert_sorting_buffer, true);
-    allocator->free((void**)&this->expert_sparse_idx_cpu, true);
-    FT_LOG_DEBUG("fetcher context free buffer finished");
-}
 
+    // free all big buffer, ignore small buffers
+    for (auto ptr : this->big_buffer_on_device) {
+        check_cuda_error(cudaFree(ptr));
+    }
+    FT_LOG_DEBUG("fetcher context free buffer finished");
+    FT_LOG_ERROR("fetcher_sync_wait_time %lld us", fetcher_sync_wait_time);
+    FT_LOG_ERROR("calc_sparse_time %lld us", calc_sparse_time);
+    FT_LOG_ERROR("expert_for_row_backup_time %lld us", expert_for_row_backup_time);
+    FT_LOG_ERROR("expert_for_row_time %lld us", cpy_expert_array_to_cpu_time);
+    FT_LOG_ERROR("total_row_cpy %lld", total_row_cpy);
+}
+template<class WeightT, class BiasT> 
+void* FetcherContext<WeightT, BiasT>::mallocOnDeviceAligned(size_t size) {
+    size_t alignment = 128;
+    void* ptr;
+    check_cuda_error(cudaMalloc(&ptr, size + alignment));
+    void* aligned_ptr = (void*)(((size_t)ptr + alignment - 1) & ~(alignment - 1));
+    big_buffer_on_device.push_back(ptr);
+    return aligned_ptr;
+}
 } // namespace fastertransformer

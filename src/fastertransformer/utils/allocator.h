@@ -420,7 +420,7 @@ public:
     void* malloc(size_t size, const bool is_set_zero = true, bool is_host = false)
     {
         FT_LOG_DEBUG(__PRETTY_FUNCTION__);
-        int64_t       buf_size = static_cast<int64_t>(ceil(size / 32.)) * 32;
+        int64_t       buf_size = static_cast<int64_t>(ceil(size / 128.)) * 128;
         torch::Tensor buf;
         if (is_host) {
             buf = torch::empty({buf_size}, torch::dtype(torch::kUInt8).device(torch::kCPU).pinned_memory(true));
