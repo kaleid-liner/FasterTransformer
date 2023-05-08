@@ -643,11 +643,11 @@ __global__ void do_mapping(int *expert_for_source_row, int len, int *map) {
     }
 }
 
-void map_on(int *expert_for_source_row, int len, int *map) {
+void map_on(int *expert_for_source_row, int len, int *map, cudaStream_t stream) {
     // expert_for_source_row and map is on GPU
     int block_size = 256;
     int grid_size = (len + block_size - 1) / block_size;
-    do_mapping<<<grid_size, block_size>>>(expert_for_source_row, len, map);
+    do_mapping<<<grid_size, block_size, 0, stream>>>(expert_for_source_row, len, map);
 }
 
 template<typename T, typename WeightType, typename Enable>
@@ -761,8 +761,13 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
                 fetcher_context->intermediate_bias_src = fc1_expert_biases;
                 
                 FT_LOG_DEBUG("=== start prefetch layer 1 ===");
+                // get time
+                auto start = std::chrono::high_resolution_clock::now();
                 fetcher_context->fetch(expert_for_source_row, num_rows * k);
                 fetcher_context->sync();
+                auto end = std::chrono::high_resolution_clock::now();
+                extern int64_t layer_1_fetch_time;
+                layer_1_fetch_time += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
                 FT_LOG_DEBUG("=== prefetch layer 1 end ===");
 
                 // restore the source to layer 2, for next fetch();
@@ -789,9 +794,12 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
             // get start time
             
             auto start = std::chrono::high_resolution_clock::now();
-            check_cuda_error(cudaMemcpy(expert_for_source_row_backup_, 
+            check_cuda_error(cudaMemcpyAsync(expert_for_source_row_backup_, 
                 fetcher_context->expert_for_source_row_fetching,
-                 sizeof(int) * num_rows * k, cudaMemcpyDeviceToDevice));
+                 sizeof(int) * num_rows * k, cudaMemcpyDeviceToDevice, stream));
+            //sync
+            check_cuda_error(cudaStreamSynchronize(stream));
+            
             auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
             extern int64_t expert_for_row_backup_time;
@@ -874,12 +882,15 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
 #endif
 
     if (prefetch_enable) {
-        check_cuda_error(cudaMemcpy(expert_for_source_row_backup_, expert_for_source_row, 
-            sizeof(int) * num_rows * k, cudaMemcpyDeviceToDevice));
+        check_cuda_error(cudaMemcpyAsync(expert_for_source_row_backup_, expert_for_source_row, 
+            sizeof(int) * num_rows * k, cudaMemcpyDeviceToDevice, stream));
+        // sync
+        check_cuda_error(cudaStreamSynchronize(stream));
+        
         expert_for_source_row = expert_for_source_row_backup_;
 
-        map_on(expert_for_source_row, num_rows * k, fetcher_context->expert_sparse_idx);
-        map_on(permuted_experts_, num_rows * k, fetcher_context->expert_sparse_idx);
+        map_on(expert_for_source_row, num_rows * k, fetcher_context->expert_sparse_idx, stream);
+        map_on(permuted_experts_, num_rows * k, fetcher_context->expert_sparse_idx, stream);
     }
 
     const int expanded_active_expert_rows = k * active_rows;    

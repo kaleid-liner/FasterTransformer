@@ -231,7 +231,10 @@ void FTT5Encoder<T>::forward(size_t                   batch_size,
                              bool                     removing_padding)
 {
     FT_LOG_DEBUG(__PRETTY_FUNCTION__);
-    auto           stream        = at::cuda::getCurrentCUDAStream().stream();
+
+    cudaStream_t stream;
+    fastertransformer::check_cuda_error(cudaStreamCreate(&stream));
+    // auto           stream        = at::cuda::getCurrentCUDAStream().stream();
     cublasHandle_t _cublasHandle = at::cuda::getCurrentCUDABlasHandle();
     cublasSetStream(_cublasHandle, stream);
     ft::Allocator<ft::AllocatorType::TH>* allocator = new ft::Allocator<ft::AllocatorType::TH>();

@@ -252,7 +252,11 @@ std::vector<th::Tensor> FTT5Decoding<T>::forward(th::optional<int64_t>    beam_w
     bool is_return_cross_attentions =
         is_return_cross_attentions_opt.has_value() ? (bool)is_return_cross_attentions_opt.value() : false;
 
-    auto           stream       = at::cuda::getCurrentCUDAStream().stream();
+    // get a non-default stream for calculation and transferring overlapping
+    // auto           stream       = at::cuda::getCurrentCUDAStream().stream();
+    cudaStream_t stream;
+    fastertransformer::check_cuda_error(cudaStreamCreate(&stream));
+    
     cublasHandle_t cublasHandle = at::cuda::getCurrentCUDABlasHandle();
     cublasSetStream(cublasHandle, stream);
     ft::Allocator<ft::AllocatorType::TH> allocator = ft::Allocator<ft::AllocatorType::TH>();

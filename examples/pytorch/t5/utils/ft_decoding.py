@@ -112,6 +112,8 @@ class FTT5DecodingWeight(object):
             self.w[i] = self.w[i].contiguous()
             if i not in [9, 11]:
                 self.w[i] = self.w[i].cuda()
+            else:
+                self.w[i] = self.w[i].pin_memory()
 
     def __init__(
             self,
