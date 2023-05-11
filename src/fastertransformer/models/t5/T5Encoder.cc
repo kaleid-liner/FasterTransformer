@@ -119,6 +119,8 @@ void T5Encoder<T>::initialize()
                                                        custom_all_reduce_comm_,
                                                        enable_custom_all_reduce_);
     }
+    ffn_layer_->initFetcherContext(FETCH_ON_DEMAND, moe_k_);
+    
     if (has_adapters()) {
         adapter_layer_ = new LinearAdapterLayer<T>(adapter_config_,
                                                    max_batch_size_,
@@ -493,6 +495,8 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
 
     allocateBuffer(request_batch_size, request_seq_len);
     FT_LOG_DEBUG("====buffer allocated finished");
+
+    ffn_layer_->reset_fetcher();
 
     size_t attentions_size = request_batch_size * num_layer_ * head_num_ * request_seq_len * request_seq_len;
     if (return_attentions) {

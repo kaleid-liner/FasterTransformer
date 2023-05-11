@@ -23,7 +23,8 @@ namespace fastertransformer {
 
 template<typename T>
 void FfnLayer<T>::reset_fetcher() {
-    fetcher_context_->first_time = true;
+    if (fetcher_context_.get() != nullptr)
+        fetcher_context_->first_time = true;
 }
 
 template<typename T>
@@ -120,6 +121,9 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
                 this->fetcher_context_->allocateBuffer(this->allocator_, m);
                 if (this->fetcher_context_->mode == PREFETCH)
                     this->fetcher_context_->set_source(this->ffn_weights_of_the_next_moe_layer_);
+                else if (this->fetcher_context_->mode == FETCH_ON_DEMAND) {
+                    this->fetcher_context_->set_source(ffn_weights);
+                }
                 FT_LOG_TRACE("=== milestones 101.6");
                 moe_fc_runner_->setFetcherContext(this->fetcher_context_.get());
             }

@@ -739,7 +739,8 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
                                           k,
                                           stream);
     
-
+    // sync to get expert_for_source_row
+    check_cuda_error(cudaStreamSynchronize(stream));
 
     // for prefetch
     bool prefetch_enable = false;
@@ -811,11 +812,23 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
 
             expert_for_source_row = expert_for_source_row_backup_;
             // the original expert_for_source_row is preserved for final_routing.
-        } else {
-            FT_LOG_ERROR("FETCH ON DEMAND is not implemented."); exit(0);
+        } else if (fetcher_context->mode == FETCH_ON_DEMAND){
+            // FT_LOG_ERROR("FETCH ON DEMAND is not implemented."); exit(0);
+            fetcher_context->fetch(expert_for_source_row, num_rows * k);
+            fetcher_context->sync();
+            num_experts = fetcher_context->active_experts_count;
+            fc1_expert_weights = fetcher_context->intermediate_dst;
+            fc2_expert_weights = fetcher_context->output_dst;
+            fc1_expert_biases = fetcher_context->intermediate_bias_dst;
         }
         FT_LOG_TRACE("fetching finished");
     }
+
+    // static int cnt = 0;
+    // if ((++cnt) % 5 == 0 ) {
+    //     FT_LOG_INFO("active_experts_count: %d", num_experts);
+    //     FT_LOG_INFO("num_rows: %d", num_rows * k);
+    // }
 
     FT_LOG_TRACE("expert_scales: %x", expert_scales);
     // printMatrix(expert_scales, 1, num_experts, num_experts, true);
