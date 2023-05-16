@@ -29,86 +29,93 @@ class FTT5DecodingWeight(object):
         hidden_dim = self.config.num_heads * self.config.d_kv;
         print("random_weights_for_inference_test for FT T5 Decoding are used!!!!!!!!!!!!!!")
         self.w = []
+        # gen = np.random.rand
+        def gen(*args):
+            return np.zeros((args))
         # CHECK_INPUT(self_layernorm_gamma, _st);                     // layer_num, d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_layers, self.config.d_model).astype(np.float32)))
         # CHECK_INPUT(self_kernel_q, _st);                            // layer_num, d_model, 3 * hidden_dim
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, 3 * hidden_dim).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_layers, self.config.d_model, 3 * hidden_dim).astype(np.float32)))
         # CHECK_INPUT(self_output_kernel, _st);                       // layer_num, hidden_dim, d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, hidden_dim, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_layers, hidden_dim, self.config.d_model).astype(np.float32)))
         # CHECK_INPUT(cross_layernorm_gamma, _st);                    // layer_num, d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_layers, self.config.d_model).astype(np.float32)))
         # CHECK_INPUT(cross_kernel_q, _st);                           // layer_num, d_model, hidden_dim
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, hidden_dim).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_layers, self.config.d_model, hidden_dim).astype(np.float32)))
         # CHECK_INPUT(cross_kernel_k, _st);                           // layer_num, mem_d_model, hidden_dim
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, hidden_dim).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_layers, self.config.d_model, hidden_dim).astype(np.float32)))
         # CHECK_INPUT(cross_kernel_v, _st);                           // layer_num, mem_d_model, hidden_dim
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model, hidden_dim).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_layers, self.config.d_model, hidden_dim).astype(np.float32)))
         # CHECK_INPUT(cross_output_kernel, _st);                      // layer_num, hidden_dim, d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, hidden_dim, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_layers, hidden_dim, self.config.d_model).astype(np.float32)))
         # CHECK_INPUT(ffn_layernorm_gamma, _st);                      // layer_num, d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_layers, self.config.d_model).astype(np.float32)))
         # CHECK_INPUT(inter_kernel, _st);                             // layer_num, d_model, inter_size
 
         moe_layer_num = len(self.config.moe_layer_index);
         no_moe_layer_num = self.config.num_layers - moe_layer_num
         size = (no_moe_layer_num + moe_layer_num * self.config.num_experts) * self.config.d_model * self.config.d_ff;
 
-        self.w.append(torch.tensor(np.random.rand(size).astype(np.float32)))
+        self.w.append(torch.tensor(gen(size).astype(np.float32)))
 
         # CHECK_INPUT(inter_kernel2, _st);                            // layer_num, d_model, inter_size
         size = (no_moe_layer_num) * self.config.d_model * self.config.d_ff;
-        self.w.append(torch.tensor(np.random.rand(size).astype(np.float32)))
+        self.w.append(torch.tensor(gen(size).astype(np.float32)))
         # CHECK_INPUT(output_kernel, _st);                            // layer_num, inter_size, d_model
         size = (no_moe_layer_num + moe_layer_num * self.config.num_experts) * self.config.d_ff * self.config.d_model;
-        self.w.append(torch.tensor(np.random.rand(size).astype(np.float32)))
+        self.w.append(torch.tensor(gen(size).astype(np.float32)))
         # CHECK_INPUT(decoding_gamma, _st);                           // d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.d_model).astype(np.float32)))
         # CHECK_INPUT(embedding_table, _st);                          // vocab_size, d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.vocab_size, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.vocab_size, self.config.d_model).astype(np.float32)))
         # CHECK_INPUT(lm_head, _st);                                  // d_model, vocab_size
-        self.w.append(torch.tensor(np.random.rand(self.config.d_model, self.config.vocab_size).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.d_model, self.config.vocab_size).astype(np.float32)))
         # CHECK_INPUT(absolute_or_relative_position_embedding, _st);  // head_num, num_bucket or max_seq_len, d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.num_heads, self.config.relative_attention_num_buckets, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_heads, self.config.relative_attention_num_buckets, self.config.d_model).astype(np.float32)))
         # if (t5_with_bias) {
         #     CHECK_INPUT(self_layernorm_beta, _st);   // layer_num, d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_layers, self.config.d_model).astype(np.float32)))
         #     CHECK_INPUT(self_bias_qkv, _st);         // layer_num,3 * hidden_dim
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, 3 * hidden_dim).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_layers, 3 * hidden_dim).astype(np.float32)))
         #     CHECK_INPUT(self_output_bias, _st);      // layer_num, d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_layers, self.config.d_model).astype(np.float32)))
         #     CHECK_INPUT(cross_layernorm_beta, _st);  // layer_num, d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_layers, self.config.d_model).astype(np.float32)))
         #     CHECK_INPUT(cross_bias_q, _st);          // layer_num, hidden_dim
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, hidden_dim).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_layers, hidden_dim).astype(np.float32)))
         #     CHECK_INPUT(cross_bias_k, _st);          // layer_num, hidden_dim
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, hidden_dim).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_layers, hidden_dim).astype(np.float32)))
         #     CHECK_INPUT(cross_bias_v, _st);          // layer_num, hidden_dim
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, hidden_dim).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_layers, hidden_dim).astype(np.float32)))
         #     CHECK_INPUT(cross_output_bias, _st);     // layer_num, d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_layers, self.config.d_model).astype(np.float32)))
         #     CHECK_INPUT(ffn_layernorm_beta, _st);    // layer_num, d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_layers, self.config.d_model).astype(np.float32)))
         #     CHECK_INPUT(inter_bias, _st);            // layer_num, inter_size
         size = (no_moe_layer_num + moe_layer_num * self.config.num_experts) * self.config.d_ff;
-        self.w.append(torch.tensor(np.random.rand(size).astype(np.float32)))
+        self.w.append(torch.tensor(gen(size).astype(np.float32)))
         #     CHECK_INPUT(inter_bias2, _st);           // layer_num, inter_size
-        self.w.append(torch.tensor(np.random.rand(self.config.num_layers, self.config.d_ff).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.num_layers, self.config.d_ff).astype(np.float32)))
         #     CHECK_INPUT(output_bias, _st);           // layer_num, d_model
         size = (no_moe_layer_num + moe_layer_num * self.config.num_experts) * self.config.d_model;
-        self.w.append(torch.tensor(np.random.rand(size).astype(np.float32)))
+        self.w.append(torch.tensor(gen(size).astype(np.float32)))
         #     CHECK_INPUT(decoding_beta, _st);         // d_model
-        self.w.append(torch.tensor(np.random.rand(self.config.d_model).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.d_model).astype(np.float32)))
         #     CHECK_INPUT(embedding_bias, _st);        // vocab_size
-        self.w.append(torch.tensor(np.random.rand(self.config.vocab_size).astype(np.float32)))
+        self.w.append(torch.tensor(gen(self.config.vocab_size).astype(np.float32)))
         # }
         # if (expert_num != 0) {
         #     CHECK_INPUT(moe_gate, _st);  // hidden_dim, expert_num
-        self.w.append(torch.tensor(np.random.rand(moe_layer_num, self.config.d_model, self.config.num_experts).astype(np.float32)))
+        self.w.append(torch.tensor(gen(moe_layer_num, self.config.d_model, self.config.num_experts).astype(np.float32)))
         # }
         for _ in range(8):
             self.w.append(torch.zeros(1))
 
         for i in range(len(self.w)):
+
+
+            # self.w[i] = self.w[i].contiguous().cuda()
+
             self.w[i] = self.w[i].contiguous()
             if i not in [9, 11]:
                 self.w[i] = self.w[i].cuda()

@@ -7,7 +7,7 @@
 
 namespace fastertransformer {
 
-
+# define GPU_ONLY 0
 # define FETCH_ON_DEMAND 1
 # define PREFETCH 2
 

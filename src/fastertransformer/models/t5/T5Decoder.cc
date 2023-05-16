@@ -111,8 +111,11 @@ void T5Decoder<T>::initialize()
                                                        enable_custom_all_reduce_);
     }
 
-    // ffn_layer_->initFetcherContext(PREFETCH, moe_k_);
-    ffn_layer_->initFetcherContext(FETCH_ON_DEMAND, moe_k_);
+    ffn_layer_->initFetcherContext(PREFETCH, moe_k_);
+    // ffn_layer_->initFetcherContext(FETCH_ON_DEMAND, moe_k_);
+    
+    // when enable this option, make sure all weights are placed in GPU
+    // ffn_layer_->initFetcherContext(GPU_ONLY, moe_k_); 
 
     if (has_adapters()) {
         adapter_layer_ = new LinearAdapterLayer<T>(adapter_config_,
