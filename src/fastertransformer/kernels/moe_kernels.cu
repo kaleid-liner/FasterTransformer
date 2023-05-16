@@ -643,11 +643,26 @@ __global__ void do_mapping(int *expert_for_source_row, int len, int *map) {
     }
 }
 
+__global__ void do_mapping_for_two(int *A, int *B, int len, int *map) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < len) {
+        A[idx] = map[A[idx]];
+        B[idx] = map[B[idx]];
+    }
+}
+
 void map_on(int *expert_for_source_row, int len, int *map, cudaStream_t stream) {
     // expert_for_source_row and map is on GPU
     int block_size = 256;
     int grid_size = (len + block_size - 1) / block_size;
     do_mapping<<<grid_size, block_size, 0, stream>>>(expert_for_source_row, len, map);
+}
+
+void map_on_for_two(int *A, int *B, int len, int *map, cudaStream_t stream) {
+    // expert_for_source_row and map is on GPU
+    int block_size = 256;
+    int grid_size = (len + block_size - 1) / block_size;
+    do_mapping_for_two<<<grid_size, block_size, 0, stream>>>(A, B, len, map);
 }
 
 template<typename T, typename WeightType, typename Enable>
@@ -902,8 +917,10 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
         
         expert_for_source_row = expert_for_source_row_backup_;
 
-        map_on(expert_for_source_row, num_rows * k, fetcher_context->expert_sparse_idx, stream);
-        map_on(permuted_experts_, num_rows * k, fetcher_context->expert_sparse_idx, stream);
+        map_on_for_two(expert_for_source_row, permuted_experts_, num_rows * k, fetcher_context->expert_sparse_idx, stream);
+        // map_on_for_two(expert_for_source_row, permuted_experts_, num_rows * k, fetcher_context->expert_sparse_idx, stream);
+        
+        // map_on(permuted_experts_, num_rows * k, fetcher_context->expert_sparse_idx, stream);
     }
 
     const int expanded_active_expert_rows = k * active_rows;    
