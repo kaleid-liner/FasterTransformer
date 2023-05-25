@@ -111,7 +111,8 @@ void T5Decoder<T>::initialize()
                                                        enable_custom_all_reduce_);
     }
 
-    ffn_layer_->initFetcherContext(PREFETCH, moe_k_);
+    size_t arena_size = (size_t)40 * 1024 * 1024 * 1024 / sizeof(T);
+    ffn_layer_->initFetcherContext(FETCH_ON_DEMAND, moe_k_, arena_size);
     // ffn_layer_->initFetcherContext(FETCH_ON_DEMAND, moe_k_);
     
     // when enable this option, make sure all weights are placed in GPU

@@ -1,9 +1,11 @@
 #pragma once
 
 #include <cuda_runtime.h>
+#include <memory>
 #include "cuda_utils.h"
 #include "src/fastertransformer/layers/FfnWeight.h"
 #include "src/fastertransformer/utils/allocator.h"
+#include "arena.h"
 
 namespace fastertransformer {
 
@@ -46,6 +48,11 @@ private:
     bool has_source = false;
     bool buffer_allocated = false;
     IAllocator* allocator;
+
+    // TODO: use dependency injection for memory arena
+    std::shared_ptr<MemoryArena<WeightT>> arena_;
+    int layer_index_;
+
 public:
     cudaStream_t stream;
     int mode; // 1: FETCH_ON_DEMAND
@@ -82,14 +89,18 @@ public:
     // called in FfnLayer.cc
     void set_source(const FfnWeight<WeightT, BiasT> *w_of_the_layer_to_load);
 
-    FetcherContext(int mode, int num_experts, 
-        size_t intermediate_w_size_per_expert, size_t output_w_size_per_expert, size_t intermediate_b_size_per_expert);
+    FetcherContext(
+        int mode, int num_experts, 
+        size_t intermediate_w_size_per_expert, size_t output_w_size_per_expert, 
+        size_t intermediate_b_size_per_expert, size_t arena_size);
     ~FetcherContext();
 
     void allocateBuffer(IAllocator* allocator, size_t num_rows);
     void freeBuffer();
     
     void* mallocOnDeviceAligned(size_t size);
+
+    using tag_t = typename MemoryArena<WeightT>::tag_t;
 };
 
 

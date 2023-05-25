@@ -132,7 +132,7 @@ public:
 
     // called in T5Decoder and TODO: T5Encoder
     virtual void reset_fetcher();
-    virtual void initFetcherContext(int mode, int moe_k);
+    virtual void initFetcherContext(int mode, int moe_k, size_t arena_size);
 
     const FfnWeight<T> *ffn_weights_of_the_next_moe_layer_ = nullptr;   // for prefetch
                                                                         // TODO: need to be assigned in T5Encoder and T5Decoder

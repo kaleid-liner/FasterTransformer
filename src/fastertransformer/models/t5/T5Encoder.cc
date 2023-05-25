@@ -119,7 +119,8 @@ void T5Encoder<T>::initialize()
                                                        custom_all_reduce_comm_,
                                                        enable_custom_all_reduce_);
     }
-    ffn_layer_->initFetcherContext(FETCH_ON_DEMAND, moe_k_);
+    size_t arena_size = (size_t)10 * 1024 * 1024 * 1024 / sizeof(T);
+    ffn_layer_->initFetcherContext(FETCH_ON_DEMAND, moe_k_, arena_size);
     
     if (has_adapters()) {
         adapter_layer_ = new LinearAdapterLayer<T>(adapter_config_,

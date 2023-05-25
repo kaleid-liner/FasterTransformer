@@ -491,7 +491,7 @@ void FfnLayer<T>::allocateBuffer()
 }
 
 template<typename T>
-void FfnLayer<T>::initFetcherContext(int mode, int moe_k) {
+void FfnLayer<T>::initFetcherContext(int mode, int moe_k, size_t arena_size) {
     if (mode != 0) {
         FT_LOG_DEBUG(" === create fetcher context for moe MODE %d", mode);
         this->fetcher_context_ = std::make_shared<FetcherContext<T>>(
@@ -499,7 +499,8 @@ void FfnLayer<T>::initFetcherContext(int mode, int moe_k) {
             expert_num_,
             hidden_units_ * inter_size_,
             inter_size_ * hidden_units_,
-            inter_size_);
+            inter_size_,
+            arena_size);
     } else {
         this->fetcher_context_.reset();
     }

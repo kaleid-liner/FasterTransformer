@@ -13,6 +13,13 @@
 
 namespace fastertransformer {
 
+// namespace {
+// MemoryArena::tag_t getTagForExpert(size_t layer_index, size_t expert_index, size_t expert_num, size_t type, size_t type_num, size_t base)
+// {
+//     return (layer_index * expert_num + expert_index) * type_num + type + base;
+// }
+// } // namespace
+
 // the linker asks me to do so
 
 template class FetcherContext<float, float>;
@@ -149,9 +156,15 @@ void FetcherContext<WeightT, BiasT>::fetch(int *next_expert_for_source_row, size
         // 1. output_w
         // 2. intermediate_w
         // 3. intermediate_bias
-        check_cuda_error(cudaMemcpyAsync(this->output_working + i * this->output_w_size_per_expert, 
-            this->output_w_src + expert * this->output_w_size_per_expert, 
-            sizeof(WeightT) * this->output_w_size_per_expert, cudaMemcpyHostToDevice, this->stream));
+        // check_cuda_error(cudaMemcpyAsync(this->output_working + i * this->output_w_size_per_expert, 
+        //     this->output_w_src + expert * this->output_w_size_per_expert, 
+        //     sizeof(WeightT) * this->output_w_size_per_expert, cudaMemcpyHostToDevice, this->stream));
+        auto dst = this->output_working + i * this->output_w_size_per_expert;
+        auto src = this->output_w_src + expert * this->output_w_size_per_expert;
+        // Currently use cpu address of the memory as tag
+        // need a better hash func to better manage the cache for experts in the same layer
+        auto tag = reinterpret_cast<tag_t>(src);
+        arena_->allocate(tag, dst, src);
 
         #ifdef FETCHER_DEBUG
         // sync the cuda stream for debug
@@ -159,9 +172,13 @@ void FetcherContext<WeightT, BiasT>::fetch(int *next_expert_for_source_row, size
         FT_LOG_DEBUG("sych 1");
         #endif
 
-        check_cuda_error(cudaMemcpyAsync(this->intermediate_working + i * this->intermediate_w_size_per_expert, 
-            this->intermediate_w_src + expert * this->intermediate_w_size_per_expert, 
-            sizeof(WeightT) * this->intermediate_w_size_per_expert, cudaMemcpyHostToDevice, this->stream));
+        // check_cuda_error(cudaMemcpyAsync(this->intermediate_working + i * this->intermediate_w_size_per_expert, 
+        //     this->intermediate_w_src + expert * this->intermediate_w_size_per_expert, 
+        //     sizeof(WeightT) * this->intermediate_w_size_per_expert, cudaMemcpyHostToDevice, this->stream));
+        dst = this->intermediate_working + i * this->intermediate_w_size_per_expert;
+        src = this->intermediate_w_src + expert * this->intermediate_w_size_per_expert;
+        tag = reinterpret_cast<tag_t>(src);
+        arena_->allocate(tag, dst, src);
         
         #ifdef FETCHER_DEBUG
         // sync the cuda stream for debug
@@ -169,9 +186,10 @@ void FetcherContext<WeightT, BiasT>::fetch(int *next_expert_for_source_row, size
         FT_LOG_DEBUG("sych 2");
         #endif
 
-        check_cuda_error(cudaMemcpyAsync(this->intermediate_bias_working + i * this->intermediate_b_size_per_expert,
-            this->intermediate_bias_src + expert * this->intermediate_b_size_per_expert, 
-            sizeof(BiasT) * this->intermediate_b_size_per_expert, cudaMemcpyDeviceToDevice, this->stream));
+        // This is not used currently. TODO: check if used
+        // check_cuda_error(cudaMemcpyAsync(this->intermediate_bias_working + i * this->intermediate_b_size_per_expert,
+        //     this->intermediate_bias_src + expert * this->intermediate_b_size_per_expert, 
+        //     sizeof(BiasT) * this->intermediate_b_size_per_expert, cudaMemcpyDeviceToDevice, this->stream));
         
         #ifdef FETCHER_DEBUG
         // sync the cuda stream for debug
@@ -206,6 +224,7 @@ void FetcherContext<WeightT, BiasT>::sync() {
 }
 
 // called in FfnLayer.cc
+// 
 template<class WeightT, class BiasT> 
 void FetcherContext<WeightT, BiasT>::set_source(const FfnWeight<WeightT, BiasT> *w_of_the_layer_to_load) {
     if (w_of_the_layer_to_load == nullptr) {
@@ -231,8 +250,10 @@ FetcherContext<WeightT, BiasT>::~FetcherContext() {
 }
 
 template<class WeightT, class BiasT> 
-FetcherContext<WeightT, BiasT>::FetcherContext(int mode, int num_experts, 
-    size_t intermediate_w_size_per_expert, size_t output_w_size_per_expert, size_t intermediate_b_size_per_expert) 
+FetcherContext<WeightT, BiasT>::FetcherContext(
+    int mode, int num_experts, 
+    size_t intermediate_w_size_per_expert, size_t output_w_size_per_expert,
+    size_t intermediate_b_size_per_expert, size_t arena_size) 
     :   mode (mode),
         first_time (true),
         num_experts (num_experts),
@@ -242,6 +263,8 @@ FetcherContext<WeightT, BiasT>::FetcherContext(int mode, int num_experts,
     
     // create cuda stream
     check_cuda_error(cudaStreamCreate(&this->stream));
+    // TODO: set the size elsewhere (after refactoring with DI)
+    arena_ = std::make_shared<MemoryArena<WeightT>>(arena_size, output_w_size_per_expert, stream);
 }
 
 
