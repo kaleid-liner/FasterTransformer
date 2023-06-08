@@ -32,6 +32,8 @@
 #include "src/fastertransformer/kernels/moe_kernels.h"
 #include "src/fastertransformer/utils/cuda_utils.h"
 #include "src/fastertransformer/utils/fetcher.h"
+#include "src/fastertransformer/utils/profiling.h"
+#include "src/fastertransformer/utils/config.h"
 
 #ifndef CUDART_VERSION
 #error CUDART_VERSION Undefined!
@@ -937,6 +939,9 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
 #endif
 
     FT_LOG_TRACE("=== milestone run_moe_fc 7 ===");
+    if (GlobalConfig<T>::instance().profiling) {
+        Profiling::instance().insert(stream, EventType::COMP_START);
+    }
     moe_gemm_runner_.moe_gemm_bias_act(permuted_data_,              // [k * num_rows, hidden_size] input
                                        fc1_expert_weights,          // [num_experts, hidden_size, inter_size] input
                                        fc1_scales,                  // NULL
@@ -966,6 +971,9 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
                               inter_size,
                               num_experts,
                               stream);
+    if (GlobalConfig<T>::instance().profiling) {
+        Profiling::instance().insert(stream, EventType::COMP_END);
+    }
     FT_LOG_TRACE("=== milestone run_moe_fc 9 ===");
 
 #ifndef NDEBUG

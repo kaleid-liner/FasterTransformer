@@ -2,16 +2,14 @@
 
 #include <cuda_runtime.h>
 #include <memory>
+#include <string>
+#include <future>
 #include "cuda_utils.h"
 #include "src/fastertransformer/layers/FfnWeight.h"
 #include "src/fastertransformer/utils/allocator.h"
 #include "arena.h"
 
 namespace fastertransformer {
-
-# define GPU_ONLY 0
-# define FETCH_ON_DEMAND 1
-# define PREFETCH 2
 
 
 // there are two things we need to fetch: intermediate weights and output weights
@@ -49,9 +47,8 @@ private:
     bool buffer_allocated = false;
     IAllocator* allocator;
 
-    // TODO: use dependency injection for memory arena
-    std::shared_ptr<MemoryArena<WeightT>> arena_;
-    int layer_index_;
+    std::string prefix_;
+    std::vector<std::future<void>> futures_;
 
 public:
     cudaStream_t stream;
@@ -92,7 +89,8 @@ public:
     FetcherContext(
         int mode, int num_experts, 
         size_t intermediate_w_size_per_expert, size_t output_w_size_per_expert, 
-        size_t intermediate_b_size_per_expert, size_t arena_size);
+        size_t intermediate_b_size_per_expert, size_t arena_size,
+        std::string prefix = "");
     ~FetcherContext();
 
     void allocateBuffer(IAllocator* allocator, size_t num_rows);
@@ -100,7 +98,7 @@ public:
     
     void* mallocOnDeviceAligned(size_t size);
 
-    using tag_t = typename MemoryArena<WeightT>::tag_t;
+    using tag_t = typename GroupedMemoryArena<WeightT>::tag_t;
 };
 
 

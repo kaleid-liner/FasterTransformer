@@ -8,6 +8,8 @@
 #include "cutlass/array.h"
 #include "cutlass/numeric_types.h"
 #include "src/fastertransformer/utils/cuda_utils.h"
+#include "src/fastertransformer/utils/profiling.h"
+#include "src/fastertransformer/utils/config.h"
 #include <chrono>
 
 
@@ -164,7 +166,7 @@ void FetcherContext<WeightT, BiasT>::fetch(int *next_expert_for_source_row, size
         // Currently use cpu address of the memory as tag
         // need a better hash func to better manage the cache for experts in the same layer
         auto tag = reinterpret_cast<tag_t>(src);
-        arena_->allocate(tag, dst, src);
+        futures_.push_back(GroupedMemoryArena<WeightT>::allocate(prefix_ + "::output", tag, dst, src));
 
         #ifdef FETCHER_DEBUG
         // sync the cuda stream for debug
@@ -177,8 +179,8 @@ void FetcherContext<WeightT, BiasT>::fetch(int *next_expert_for_source_row, size
         //     sizeof(WeightT) * this->intermediate_w_size_per_expert, cudaMemcpyHostToDevice, this->stream));
         dst = this->intermediate_working + i * this->intermediate_w_size_per_expert;
         src = this->intermediate_w_src + expert * this->intermediate_w_size_per_expert;
-        tag = reinterpret_cast<tag_t>(src);
-        arena_->allocate(tag, dst, src);
+        // Use the same tag for output and intermediate
+        futures_.push_back(GroupedMemoryArena<WeightT>::allocate(prefix_ + "::intermediate", tag, dst, src));
         
         #ifdef FETCHER_DEBUG
         // sync the cuda stream for debug
@@ -210,12 +212,11 @@ void FetcherContext<WeightT, BiasT>::sync() {
     // sync the steam
     FT_LOG_TRACE("sync stream\n");
     // get the millisec
-    auto start = std::chrono::high_resolution_clock::now();
-    check_cuda_error(cudaStreamSynchronize(this->stream));
-    auto end = std::chrono::high_resolution_clock::now();
-    //add to fetcher_time
-    fetcher_sync_wait_time += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    FT_LOG_TRACE("sync end");
+    for (auto& future : futures_) {
+        future.wait();
+    }
+    futures_.clear();
+    check_cuda_error(cudaStreamSynchronize(stream));
 
     // update dst from working (swap them)
     std::swap(this->output_dst, this->output_working);
@@ -246,6 +247,8 @@ template<class WeightT, class BiasT>
 FetcherContext<WeightT, BiasT>::~FetcherContext() {
     this->freeBuffer();
     //destroy the stream
+    Profiling::instance().report();
+    Profiling::instance().reset();
     check_cuda_error(cudaStreamDestroy(this->stream));
 }
 
@@ -253,18 +256,23 @@ template<class WeightT, class BiasT>
 FetcherContext<WeightT, BiasT>::FetcherContext(
     int mode, int num_experts, 
     size_t intermediate_w_size_per_expert, size_t output_w_size_per_expert,
-    size_t intermediate_b_size_per_expert, size_t arena_size) 
-    :   mode (mode),
-        first_time (true),
-        num_experts (num_experts),
-        intermediate_w_size_per_expert (intermediate_w_size_per_expert),
-        output_w_size_per_expert (output_w_size_per_expert),
-        intermediate_b_size_per_expert (intermediate_b_size_per_expert) {
+    size_t intermediate_b_size_per_expert, size_t arena_size,
+    std::string prefix) 
+    :   mode(mode),
+        first_time(true),
+        num_experts(num_experts),
+        intermediate_w_size_per_expert(intermediate_w_size_per_expert),
+        output_w_size_per_expert(output_w_size_per_expert),
+        intermediate_b_size_per_expert(intermediate_b_size_per_expert),
+        prefix_(prefix) {
     
     // create cuda stream
     check_cuda_error(cudaStreamCreate(&this->stream));
     // TODO: set the size elsewhere (after refactoring with DI)
-    arena_ = std::make_shared<MemoryArena<WeightT>>(arena_size, output_w_size_per_expert, stream);
+    FT_LOG_ERROR("%d", stream);
+    GroupedMemoryArena<WeightT>::createMemoryArena(prefix_ + "::intermediate", arena_size, intermediate_w_size_per_expert, stream);
+    GroupedMemoryArena<WeightT>::createMemoryArena(prefix_ + "::output", arena_size, output_w_size_per_expert, stream);
+    Profiling::instance().reset();
 }
 
 

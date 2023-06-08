@@ -15,6 +15,7 @@
  */
 
 #include "src/fastertransformer/models/t5/T5Decoder.h"
+#include "src/fastertransformer/utils/config.h"
 
 namespace fastertransformer {
 
@@ -111,8 +112,10 @@ void T5Decoder<T>::initialize()
                                                        enable_custom_all_reduce_);
     }
 
-    size_t arena_size = (size_t)40 * 1024 * 1024 * 1024 / sizeof(T);
-    ffn_layer_->initFetcherContext(FETCH_ON_DEMAND, moe_k_, arena_size);
+    auto& config = GlobalConfig<T>::instance();
+    config.setDefault();
+    config.print();
+    ffn_layer_->initFetcherContext(config.decoder_fetcher_mode, moe_k_, config.decoder_arena_size, "decoder");
     // ffn_layer_->initFetcherContext(FETCH_ON_DEMAND, moe_k_);
     
     // when enable this option, make sure all weights are placed in GPU

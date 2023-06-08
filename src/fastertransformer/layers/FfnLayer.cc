@@ -17,6 +17,7 @@
 #include "src/fastertransformer/layers/FfnLayer.h"
 #include "src/fastertransformer/kernels/transpose_int8_kernels.h"
 #include "src/fastertransformer/utils/nvtx_utils.h"
+#include "src/fastertransformer/utils/config.h"
 
 namespace fastertransformer {
 
@@ -491,7 +492,7 @@ void FfnLayer<T>::allocateBuffer()
 }
 
 template<typename T>
-void FfnLayer<T>::initFetcherContext(int mode, int moe_k, size_t arena_size) {
+void FfnLayer<T>::initFetcherContext(int mode, int moe_k, size_t arena_size, std::string prefix) {
     if (mode != 0) {
         FT_LOG_DEBUG(" === create fetcher context for moe MODE %d", mode);
         this->fetcher_context_ = std::make_shared<FetcherContext<T>>(
@@ -500,7 +501,8 @@ void FfnLayer<T>::initFetcherContext(int mode, int moe_k, size_t arena_size) {
             hidden_units_ * inter_size_,
             inter_size_ * hidden_units_,
             inter_size_,
-            arena_size);
+            arena_size,
+            prefix);
     } else {
         this->fetcher_context_.reset();
     }

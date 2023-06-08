@@ -18,6 +18,7 @@
 #include "src/fastertransformer/kernels/add_residual_kernels.h"
 #include "src/fastertransformer/kernels/decoding_kernels.h"
 #include "src/fastertransformer/utils/Tensor.h"
+#include "src/fastertransformer/utils/config.h"
 
 namespace fastertransformer {
 
@@ -119,8 +120,10 @@ void T5Encoder<T>::initialize()
                                                        custom_all_reduce_comm_,
                                                        enable_custom_all_reduce_);
     }
-    size_t arena_size = (size_t)10 * 1024 * 1024 * 1024 / sizeof(T);
-    ffn_layer_->initFetcherContext(FETCH_ON_DEMAND, moe_k_, arena_size);
+    auto& config = GlobalConfig<T>::instance();
+    config.setDefault();
+    config.print();
+    ffn_layer_->initFetcherContext(config.encoder_fetcher_mode, moe_k_, config.encoder_arena_size, "encoder");
     
     if (has_adapters()) {
         adapter_layer_ = new LinearAdapterLayer<T>(adapter_config_,

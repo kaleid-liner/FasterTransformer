@@ -104,8 +104,12 @@ set_property(TARGET tensor PROPERTY POSITION_INDEPENDENT_CODE  ON)
 set_property(TARGET tensor PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
 target_link_libraries(tensor PUBLIC cuda_utils logger)
 
+add_library(profiling STATIC profiling.cc)
+set_property(TARGET profiling PROPERTY POSITION_INDEPENDENT_CODE  ON)
+set_property(TARGET profiling PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
+target_link_libraries(profiling PUBLIC cuda_utils logger)
 
 add_library(fetcher STATIC fetcher.cc)
 set_property(TARGET fetcher PROPERTY POSITION_INDEPENDENT_CODE  ON)
 set_property(TARGET fetcher PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
-target_link_libraries(fetcher PUBLIC cuda_utils logger)
+target_link_libraries(fetcher PUBLIC cuda_utils logger profiling)
