@@ -36,4 +36,5 @@ private:
     std::vector<cudaEvent_t> mem_start_events_;
     std::vector<cudaEvent_t> mem_end_events_;
 };
-}
+
+} // namespace fastertransformer

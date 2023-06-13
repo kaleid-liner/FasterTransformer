@@ -161,11 +161,14 @@ void FetcherContext<WeightT, BiasT>::fetch(int *next_expert_for_source_row, size
         // check_cuda_error(cudaMemcpyAsync(this->output_working + i * this->output_w_size_per_expert, 
         //     this->output_w_src + expert * this->output_w_size_per_expert, 
         //     sizeof(WeightT) * this->output_w_size_per_expert, cudaMemcpyHostToDevice, this->stream));
-        auto dst = this->output_working + i * this->output_w_size_per_expert;
+        auto dst = this->output_working + 0 * this->output_w_size_per_expert;
         auto src = this->output_w_src + expert * this->output_w_size_per_expert;
         // Currently use cpu address of the memory as tag
         // need a better hash func to better manage the cache for experts in the same layer
         auto tag = reinterpret_cast<tag_t>(src);
+        if (GlobalConfig<WeightT>::instance().profiling) {
+            Profiling::instance().insert(stream, EventType::MEM_START);
+        }
         futures_.push_back(GroupedMemoryArena<WeightT>::allocate(prefix_ + "::output", tag, dst, src));
 
         #ifdef FETCHER_DEBUG
@@ -177,7 +180,7 @@ void FetcherContext<WeightT, BiasT>::fetch(int *next_expert_for_source_row, size
         // check_cuda_error(cudaMemcpyAsync(this->intermediate_working + i * this->intermediate_w_size_per_expert, 
         //     this->intermediate_w_src + expert * this->intermediate_w_size_per_expert, 
         //     sizeof(WeightT) * this->intermediate_w_size_per_expert, cudaMemcpyHostToDevice, this->stream));
-        dst = this->intermediate_working + i * this->intermediate_w_size_per_expert;
+        dst = this->intermediate_working + 0 * this->intermediate_w_size_per_expert;
         src = this->intermediate_w_src + expert * this->intermediate_w_size_per_expert;
         // Use the same tag for output and intermediate
         futures_.push_back(GroupedMemoryArena<WeightT>::allocate(prefix_ + "::intermediate", tag, dst, src));
@@ -214,6 +217,9 @@ void FetcherContext<WeightT, BiasT>::sync() {
     // get the millisec
     for (auto& future : futures_) {
         future.wait();
+    }
+    if (GlobalConfig<WeightT>::instance().profiling) {
+        Profiling::instance().insert(stream, EventType::MEM_END);
     }
     futures_.clear();
     check_cuda_error(cudaStreamSynchronize(stream));
@@ -286,12 +292,19 @@ void FetcherContext<WeightT, BiasT>::allocateBuffer(IAllocator* allocator, size_
     this->expert_for_source_row_fetching = (int*)this->mallocOnDeviceAligned(sizeof(int) * num_rows);
     this->expert_sparse_idx = (int*)this->mallocOnDeviceAligned(sizeof(int) * num_experts);
     this->expert_sparse_idx_working = (int*)this->mallocOnDeviceAligned(sizeof(int) * num_experts);
-    this->output_dst = (WeightT*)this->mallocOnDeviceAligned(sizeof(WeightT) * output_w_size_per_expert * num_experts);
-    this->intermediate_dst = (WeightT*)this->mallocOnDeviceAligned(sizeof(WeightT) * intermediate_w_size_per_expert * num_experts);
     this->intermediate_bias_dst = (BiasT*)this->mallocOnDeviceAligned(sizeof(BiasT) * intermediate_b_size_per_expert * num_experts);
-    this->output_working = (WeightT*)this->mallocOnDeviceAligned(sizeof(WeightT) * output_w_size_per_expert * num_experts);
-    this->intermediate_working = (WeightT*)this->mallocOnDeviceAligned(sizeof(WeightT) * intermediate_w_size_per_expert * num_experts);
     this->intermediate_bias_working = (BiasT*)this->mallocOnDeviceAligned(sizeof(BiasT) * intermediate_b_size_per_expert * num_experts);
+
+    // TODO: refactor
+    this->output_dst = GroupedMemoryArena<WeightT>::mallocBuffer(prefix_ + "::output", output_w_size_per_expert * num_experts, 1);
+    this->intermediate_dst = GroupedMemoryArena<WeightT>::mallocBuffer(prefix_ + "::intermediate", intermediate_w_size_per_expert * num_experts, 1);
+    this->output_working = GroupedMemoryArena<WeightT>::mallocBuffer(prefix_ + "::output", output_w_size_per_expert * num_experts, 1);
+    this->intermediate_working = GroupedMemoryArena<WeightT>::mallocBuffer(prefix_ + "::intermediate", intermediate_w_size_per_expert * num_experts, 1);
+    big_buffer_on_device.push_back(output_dst);
+    big_buffer_on_device.push_back(intermediate_dst);
+    big_buffer_on_device.push_back(output_working);
+    big_buffer_on_device.push_back(intermediate_working);
+
     // this->row_expert_sorting_buffer = (int*)allocator->reMalloc(this->row_expert_sorting_buffer, sizeof(int) * num_rows, false, true);
     // this->expert_sparse_idx_cpu = (int*)allocator->reMalloc(this->expert_sparse_idx_cpu, sizeof(int) * num_experts, false, true);
     check_cuda_error(cudaMallocHost(&this->row_expert_sorting_buffer, sizeof(int) * num_rows + 128));
@@ -332,6 +345,8 @@ void FetcherContext<WeightT, BiasT>::freeBuffer() {
     FT_LOG_ERROR("total_row_cpy %lld", total_row_cpy);
     FT_LOG_ERROR("layer_1_fetch_time %lld us", layer_1_fetch_time);
 }
+
+// TODO: refactor
 template<class WeightT, class BiasT> 
 void* FetcherContext<WeightT, BiasT>::mallocOnDeviceAligned(size_t size) {
     size_t alignment = 128;

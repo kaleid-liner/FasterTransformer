@@ -3,7 +3,7 @@ python /workspace/FasterTransformer/examples/pytorch/t5/perf_benchmark.py \
         --beam_width 4 \
         --seq_len 256 \
         --data_type fp32 \
-        --test_time 1 \
+        --test_time 3 \
         --sampling_topk 1 \
         --model_type Megatron-DeepSpeed \
         --ckpt_path /workspace/FasterTransformer/fake_t5_moe_ckpt \

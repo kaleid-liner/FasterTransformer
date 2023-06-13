@@ -12,7 +12,7 @@ void clearEvents(std::vector<cudaEvent_t>& events)
     events.clear();
 }
 
-}
+} // namespace
 
 namespace fastertransformer {
 
@@ -64,4 +64,4 @@ void Profiling::report() const
     }
 }
 
-}
+} // namespace fastertransformer
