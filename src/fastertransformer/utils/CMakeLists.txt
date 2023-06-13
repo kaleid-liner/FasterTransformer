@@ -109,7 +109,12 @@ set_property(TARGET profiling PROPERTY POSITION_INDEPENDENT_CODE  ON)
 set_property(TARGET profiling PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
 target_link_libraries(profiling PUBLIC cuda_utils logger)
 
+add_library(arena STATIC arena.cc)
+set_property(TARGET arena PROPERTY POSITION_INDEPENDENT_CODE  ON)
+set_property(TARGET arena PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
+target_link_libraries(arena PUBLIC cuda_utils logger profiling memory_utils)
+
 add_library(fetcher STATIC fetcher.cc)
 set_property(TARGET fetcher PROPERTY POSITION_INDEPENDENT_CODE  ON)
 set_property(TARGET fetcher PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
-target_link_libraries(fetcher PUBLIC cuda_utils logger profiling)
+target_link_libraries(fetcher PUBLIC cuda_utils logger profiling arena)

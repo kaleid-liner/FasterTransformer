@@ -76,38 +76,7 @@ public:
 
     // Allocate a chunk
     // note: tag < 0 is reserved
-    std::future<void> allocate(tag_t tag, T* dst = nullptr, const T* src = nullptr)
-    {
-        auto repl = cache_->PutKey(tag, nullptr);
-        auto future = std::async(std::launch::async, [&]() {
-            if (repl.first != nullptr && !repl.second && src != nullptr) {
-                // FT_LOG_ERROR("Cache miss");
-                // FT_LOG_ERROR("%p %p %p %d", repl.first, src, ptr_, stream_);
-                if (GlobalConfig<T>::instance().disk_offload) {
-                    std::ifstream ifs(GlobalConfig<T>::instance().offload_path, std::ifstream::binary);
-                    ifs.read(offload_buffer_, chunk_size_ * sizeof(T));
-                }
-                check_cuda_error(
-                    cudaMemcpyAsync(
-                        repl.first, src, chunk_size_ * sizeof(T),
-                        cudaMemcpyHostToDevice, stream_));
-            } else {
-                //FT_LOG_ERROR("Cache hit");
-            }
-            // not needed for batch size = 1
-            if (dst != nullptr) {
-                // try {
-                //     check_cuda_error(
-                //         cudaMemcpyAsync(
-                //             dst, repl.first, chunk_size_ * sizeof(T),
-                //             cudaMemcpyDeviceToDevice, stream_));
-                // } catch (const std::exception &exc) {
-                //     std::cerr << exc.what() << std::endl;
-                // }
-            }
-        });
-        return future;
-    }
+    std::future<void> allocate(tag_t tag, T* dst = nullptr, const T* src = nullptr);
 
     // Wait until all previous work is done
     void synchronize()

@@ -161,7 +161,7 @@ void FetcherContext<WeightT, BiasT>::fetch(int *next_expert_for_source_row, size
         // check_cuda_error(cudaMemcpyAsync(this->output_working + i * this->output_w_size_per_expert, 
         //     this->output_w_src + expert * this->output_w_size_per_expert, 
         //     sizeof(WeightT) * this->output_w_size_per_expert, cudaMemcpyHostToDevice, this->stream));
-        auto dst = this->output_working + 0 * this->output_w_size_per_expert;
+        auto dst = this->output_working + i * this->output_w_size_per_expert;
         auto src = this->output_w_src + expert * this->output_w_size_per_expert;
         // Currently use cpu address of the memory as tag
         // need a better hash func to better manage the cache for experts in the same layer
@@ -169,6 +169,7 @@ void FetcherContext<WeightT, BiasT>::fetch(int *next_expert_for_source_row, size
         if (GlobalConfig<WeightT>::instance().profiling) {
             Profiling::instance().insert(stream, EventType::MEM_START);
         }
+        
         futures_.push_back(GroupedMemoryArena<WeightT>::allocate(prefix_ + "::output", tag, dst, src));
 
         #ifdef FETCHER_DEBUG
@@ -180,7 +181,7 @@ void FetcherContext<WeightT, BiasT>::fetch(int *next_expert_for_source_row, size
         // check_cuda_error(cudaMemcpyAsync(this->intermediate_working + i * this->intermediate_w_size_per_expert, 
         //     this->intermediate_w_src + expert * this->intermediate_w_size_per_expert, 
         //     sizeof(WeightT) * this->intermediate_w_size_per_expert, cudaMemcpyHostToDevice, this->stream));
-        dst = this->intermediate_working + 0 * this->intermediate_w_size_per_expert;
+        dst = this->intermediate_working + i * this->intermediate_w_size_per_expert;
         src = this->intermediate_w_src + expert * this->intermediate_w_size_per_expert;
         // Use the same tag for output and intermediate
         futures_.push_back(GroupedMemoryArena<WeightT>::allocate(prefix_ + "::intermediate", tag, dst, src));
