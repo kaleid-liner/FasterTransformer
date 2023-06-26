@@ -10,6 +10,7 @@
 #include "src/fastertransformer/utils/cuda_utils.h"
 #include "src/fastertransformer/utils/profiling.h"
 #include "src/fastertransformer/utils/config.h"
+#include "src/fastertransformer/utils/random.h"
 #include <chrono>
 
 
@@ -153,6 +154,8 @@ void FetcherContext<WeightT, BiasT>::fetch(int *next_expert_for_source_row, size
     // launch fetch on the stream, from source to working
     for(int i = 0; i < this->active_experts_count; i++) {
         int expert = this->row_expert_sorting_buffer[i];
+        expert = stdex::randint(0, (int)num_experts - 1);
+        std::cout << "Expert:" << expert << std::endl;
 
         // copy three things
         // 1. output_w

@@ -28,6 +28,7 @@ public:
 
         profiling = true;
         disk_offload = true;
+
         offload_path = "/workspace/weights.dat";
     }
 
@@ -48,6 +49,7 @@ public:
     bool profiling;
     bool disk_offload;
     std::string offload_path;
+    bool use_cache;
 private:
     GlobalConfig() {}
 };

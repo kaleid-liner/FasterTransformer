@@ -2,6 +2,7 @@
 
 #include <vector>
 #include "src/fastertransformer/utils/cuda_utils.h"
+#include "src/fastertransformer/utils/meter.h"
 
 namespace fastertransformer {
 
@@ -30,11 +31,18 @@ public:
         return instance;
     }
 
+    void cacheHit(bool hit)
+    {
+        cache_hit_rate_.update(hit);
+    }
+
 private:
     std::vector<cudaEvent_t> comp_start_events_;
     std::vector<cudaEvent_t> comp_end_events_;
     std::vector<cudaEvent_t> mem_start_events_;
     std::vector<cudaEvent_t> mem_end_events_;
+    
+    AverageMeter<double> cache_hit_rate_;
 };
 
 } // namespace fastertransformer

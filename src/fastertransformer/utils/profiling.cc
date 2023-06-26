@@ -1,4 +1,5 @@
 #include "profiling.h"
+#include "meter.h"
 
 
 namespace {
@@ -49,19 +50,26 @@ void Profiling::reset()
     clearEvents(comp_end_events_);
     clearEvents(mem_start_events_);
     clearEvents(mem_end_events_);
+    cache_hit_rate_.reset();
 }
 
 void Profiling::report() const
 {
     float ms;
+    AverageMeter<float> comp_lats, mem_lats;
     for (int i = 0; i < comp_start_events_.size(); i++) {
         cudaEventElapsedTime(&ms, comp_start_events_[i], comp_end_events_[i]);
-        std::cout << "Comp kernel " << i << ": " << ms << " ms" << std::endl;
+        comp_lats.update(ms);
     }
+    std::cout << "Comp avg lats: " << comp_lats.getAvg() << " ms" << std::endl;
+
     for (int i = 0; i < mem_start_events_.size(); i++) {
         cudaEventElapsedTime(&ms, mem_start_events_[i], mem_end_events_[i]);
-        std::cout << "Mem kernel " << i << ": " << ms << " ms" << std::endl;
+        mem_lats.update(ms);
     }
+    std::cout << "Mem avg lats: " << mem_lats.getAvg() << " ms" << std::endl;
+
+    std::cout << "Average cache hit rate: " << cache_hit_rate_.getAvg() << std::endl;
 }
 
 } // namespace fastertransformer
