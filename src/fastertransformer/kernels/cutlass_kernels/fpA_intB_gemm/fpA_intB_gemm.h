@@ -25,7 +25,7 @@ namespace fastertransformer {
 
 /*
   This runner only supports:
-  T in {half, __nv_bfloat} WeightType in {int8_t, cutlass::uint4b_t}
+  T in {half, __nv_bfloat} WeightType in {int8_t, cutlass::uint4b_t, cutlass:fp4_t, cutlass:nf4_t}
 
   Activations, biases, scales and outputs are all assumed to be row-major.
 

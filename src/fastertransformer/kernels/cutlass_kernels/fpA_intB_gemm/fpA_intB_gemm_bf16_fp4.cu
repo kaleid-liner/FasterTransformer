@@ -17,8 +17,7 @@
 #include "src/fastertransformer/kernels/cutlass_kernels/fpA_intB_gemm/fpA_intB_gemm_template.h"
 
 namespace fastertransformer {
-template class CutlassFpAIntBGemmRunner<float, uint8_t>;
-template class CutlassFpAIntBGemmRunner<float, cutlass::uint4b_t>;
-template class CutlassFpAIntBGemmRunner<float, cutlass::fp4_t>;
-template class CutlassFpAIntBGemmRunner<float, cutlass::nf4_t>;
+#ifdef ENABLE_BF16
+template class CutlassFpAIntBGemmRunner<__nv_bfloat16, fp4_t>;
+#endif
 }  // namespace fastertransformer

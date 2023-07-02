@@ -422,6 +422,46 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint4b_t, N> {
     }
 };
 
+// Specialization for fp4 and nf4. No faster algorithm. 
+// Fallback to use NumericArrayConverter.
+template<typename T>
+struct FastInterleavedAndBiasedNumericArrayConverter<T, fp4_t, 8> {
+    using result_type = Array<T, 8>;
+    using source_type = Array<fp4_t, 8>;
+
+    CUTLASS_DEVICE
+    static result_type convert(source_type const& source)
+    {
+        NumericArrayConverter<T, fp4_t, 8> converter_;
+        return converter_(source);
+    }
+
+    CUTLASS_DEVICE
+    result_type operator()(source_type const& s)
+    {
+        return convert(s);
+    }
+};
+
+template<typename T>
+struct FastInterleavedAndBiasedNumericArrayConverter<T, nf4_t, 8> {
+    using result_type = Array<T, 8>;
+    using source_type = Array<nf4_t, 8>;
+
+    CUTLASS_DEVICE
+    static result_type convert(source_type const& source)
+    {
+        NumericArrayConverter<T, nf4_t, 8> converter_;
+        return converter_(source);
+    }
+
+    CUTLASS_DEVICE
+    result_type operator()(source_type const& s)
+    {
+        return convert(s);
+    }
+};
+
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 }  // namespace cutlass

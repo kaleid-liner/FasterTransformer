@@ -82,7 +82,9 @@ void generic_moe_gemm_kernelLauncher(const T*          A,
 
     static_assert(cutlass::platform::is_same<T, WeightType>::value
                       || cutlass::platform::is_same<WeightType, uint8_t>::value
-                      || cutlass::platform::is_same<WeightType, cutlass::uint4b_t>::value,
+                      || cutlass::platform::is_same<WeightType, cutlass::uint4b_t>::value
+                      || cutlass::platform::is_same<WeightType, cutlass::fp4_t>::value
+                      || cutlass::platform::is_same<WeightType, cutlass::nf4_t>::value,
                   "");
 
     // The cutlass type for the input elements. This is needed to convert to cutlass::half_t if necessary.

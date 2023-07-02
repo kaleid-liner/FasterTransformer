@@ -106,6 +106,12 @@ LayoutDetails getLayoutDetailsForArch(QuantType quant_type)
     else if (quant_type == QuantType::PACKED_INT4_WEIGHT_ONLY) {
         details = getLayoutDetailsForArchAndQuantType<cutlassArch, cutlass::uint4b_t>();
     }
+    else if (quant_type == QuantType::PACKED_FP4_WEIGHT_ONLY) {
+        details = getLayoutDetailsForArchAndQuantType<cutlassArch, cutlass::fp4_t>();
+    }
+    else if (quant_type == QuantType::PACKED_NF4_WEIGHT_ONLY) {
+        details = getLayoutDetailsForArchAndQuantType<cutlassArch, cutlass::nf4_t>();
+    }
     else {
         FT_CHECK_WITH_INFO(false, "Unsupported quantization type");
     }
