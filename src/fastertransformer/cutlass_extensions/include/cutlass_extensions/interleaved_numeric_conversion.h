@@ -39,8 +39,41 @@
 #include "cutlass/array.h"
 #include "cutlass/half.h"
 #include "cutlass/numeric_types.h"
+#include "cutlass/numeric_conversion.h"
 
 namespace cutlass {
+
+namespace {
+
+CUTLASS_DEVICE
+uint16_t dDequantizeFP4Tree(uint8_t val)
+{
+  uint16_t sign = val & 0b1000;
+  if((val & 0b0100) == 4) // 0
+    if((val & 0b0010) == 2) //01
+      if((val & 0b0001) == 1) // 111
+        return 0x3400 + sign;
+      else
+        return 0x3155 + sign;
+    else
+      if((val & 0b0001) == 1) // 110
+        return 0x3800 + sign;
+      else
+        return 0x3555 + sign;
+  else
+    if((val & 0b0010) == 2) //10
+      if((val & 0b0001) == 1) // 101
+        return 0x3c00 + sign;
+      else
+        return 0x3955 + sign;
+    else 
+      if((val & 0b0001) == 1) // 100
+        return 0x1d55 + sign;
+      else
+        return 0x0000 + sign;
+}
+
+}
 
 // This converter is meant to be used with data interleaved in a 32-bit register where the even elements are in the low
 // bits and the odd elemeents are in the high bits of the register. In addition, it assumes elements were originally
@@ -443,6 +476,58 @@ struct FastInterleavedAndBiasedNumericArrayConverter<T, fp4_t, 8> {
     }
 };
 
+template<>
+struct FastInterleavedAndBiasedNumericArrayConverter<half_t, fp4_t, 8> {
+    using result_type = Array<half_t, 8>;
+    using source_type = Array<fp4_t, 8>;
+
+    CUTLASS_DEVICE
+    static result_type convert(source_type const& source)
+    {
+        static const uint16_t cuda_quant_map[16] = {
+            0x0,
+            0x1d55,
+            0x3955,
+            0x3c00,
+            0x3555,
+            0x3800,
+            0x3155,
+            0x3400,
+            0x8000,
+            0x9d55,
+            0xb955,
+            0xbc00,
+            0xb555,
+            0xb800,
+            0xb155,
+            0xb400
+        };
+
+        result_type result;
+
+        uint16_t*      h          = reinterpret_cast<uint16_t*>(&result);
+        uint32_t const source_i4s = reinterpret_cast<uint32_t const&>(source);
+
+        static constexpr uint32_t MASK = 0x0f;
+        uint32_t i4s = source_i4s;
+
+        CUTLASS_PRAGMA_UNROLL
+        for (int ii = 0; ii < 8; ++ii) {
+            h[ii] = cuda_quant_map[i4s & MASK];
+            // h[ii] = dDequantizeFP4Tree(i4s & MASK);
+            i4s >>= 4;
+        }
+
+        return result;
+    }
+
+    CUTLASS_DEVICE
+    result_type operator()(source_type const& s)
+    {
+        return convert(s);
+    }
+};
+
 template<typename T>
 struct FastInterleavedAndBiasedNumericArrayConverter<T, nf4_t, 8> {
     using result_type = Array<T, 8>;
@@ -453,6 +538,147 @@ struct FastInterleavedAndBiasedNumericArrayConverter<T, nf4_t, 8> {
     {
         NumericArrayConverter<T, nf4_t, 8> converter_;
         return converter_(source);
+    }
+
+    CUTLASS_DEVICE
+    result_type operator()(source_type const& s)
+    {
+        return convert(s);
+    }
+};
+
+template<typename T, int N>
+struct FastInterleavedAndBiasedNumericArrayConverter<T, fp4_t, N> {
+    static constexpr int VEC_WIDTH = 8;
+    static_assert(!(N % VEC_WIDTH), "N must be multiple of 8.");
+
+    using result_type = Array<T, N>;
+    using source_type = Array<fp4_t, N>;
+
+    CUTLASS_DEVICE
+    static result_type convert(source_type const& source)
+    {
+        using scalar_result_type = typename result_type::Element;
+        using scalar_source_type = typename source_type::Element;
+        FastInterleavedAndBiasedNumericArrayConverter<scalar_result_type, scalar_source_type, VEC_WIDTH>
+            convert_vector_;
+
+        result_type result;
+        using vec_result = Array<scalar_result_type, VEC_WIDTH>;
+        using vec_source = Array<scalar_source_type, VEC_WIDTH>;
+
+        vec_result*       result_ptr = reinterpret_cast<vec_result*>(&result);
+        vec_source const* source_ptr = reinterpret_cast<vec_source const*>(&source);
+
+        CUTLASS_PRAGMA_UNROLL
+        for (int i = 0; i < N / VEC_WIDTH; ++i) {
+            result_ptr[i] = convert_vector_(source_ptr[i]);
+        }
+
+        return result;
+    }
+
+    CUTLASS_DEVICE
+    result_type operator()(source_type const& s)
+    {
+        return convert(s);
+    }
+};
+
+// template<int N>
+// struct FastInterleavedAndBiasedNumericArrayConverter<half_t, fp4_t, N> {
+//     static constexpr int VEC_WIDTH = 8;
+//     static_assert(!(N % VEC_WIDTH), "N must be multiple of 8.");
+
+//     using result_type = Array<half_t, N>;
+//     using source_type = Array<fp4_t, N>;
+
+//     CUTLASS_DEVICE
+//     static result_type convert(source_type const& source)
+//     {
+//         static const uint16_t cuda_quant_map[16] = {
+//             0x0,
+//             0x1d55,
+//             0x3955,
+//             0x3c00,
+//             0x3555,
+//             0x3800,
+//             0x3155,
+//             0x3400,
+//             0x8000,
+//             0x9d55,
+//             0xb955,
+//             0xbc00,
+//             0xb555,
+//             0xb800,
+//             0xb155,
+//             0xb400
+//         };
+
+//         __shared__ uint16_t local_cqm[16];
+//         for (int i = threadIdx.x; i < 16; i += blockDim.x) {
+//             local_cqm[i] = cuda_quant_map[i];
+//         }
+
+//         __syncthreads();
+
+//         result_type result;
+
+//         uint16_t*       h          = reinterpret_cast<uint16_t*>(&result);
+//         uint32_t const* source_i4s = reinterpret_cast<uint32_t const*>(&source);
+
+//         static constexpr uint32_t MASK = 0x0f;
+
+//         CUTLASS_PRAGMA_UNROLL
+//         for (int i = 0; i < N / VEC_WIDTH; ++i) {
+//             uint32_t i4s = source_i4s[i];
+//             CUTLASS_PRAGMA_UNROLL
+//             for (int ii = 0; ii < VEC_WIDTH; ++ii) {
+//                 h[ii] = local_cqm[i4s & MASK];
+//                 i4s >>= 4;
+//             }
+//             h += VEC_WIDTH;
+//         }
+
+//         return result;
+//     }
+
+//     CUTLASS_DEVICE
+//     result_type operator()(source_type const& s)
+//     {
+//         return convert(s);
+//     }
+// };
+
+template<typename T, int N>
+struct FastInterleavedAndBiasedNumericArrayConverter<T, nf4_t, N> {
+    static constexpr int VEC_WIDTH = 8;
+    static_assert(!(N % VEC_WIDTH), "N must be multiple of 8.");
+
+    using result_type = Array<T, N>;
+    using source_type = Array<nf4_t, N>;
+
+    CUTLASS_DEVICE
+    static result_type convert(source_type const& source)
+    {
+        using scalar_result_type = typename result_type::Element;
+        using scalar_source_type = typename source_type::Element;
+        FastInterleavedAndBiasedNumericArrayConverter<scalar_result_type, scalar_source_type, VEC_WIDTH>
+            convert_vector_;
+
+        result_type result;
+        using vec_result = Array<scalar_result_type, VEC_WIDTH>;
+        using vec_source = Array<scalar_source_type, VEC_WIDTH>;
+
+        vec_result*       result_ptr = reinterpret_cast<vec_result*>(&result);
+        vec_source const* source_ptr = reinterpret_cast<vec_source const*>(&source);
+
+        CUTLASS_PRAGMA_UNROLL
+        for (int i = 0; i < N / VEC_WIDTH; ++i) {
+            result_ptr[i] = convert_vector_(source_ptr[i]);
+        }
+
+        return result;
     }
 
     CUTLASS_DEVICE

@@ -27,3 +27,17 @@ if (TORCH_VERSION VERSION_GREATER_EQUAL "1.9.0")
 else()
     message("TORCH_VERSION ${TORCH_VERSION} < 1.9.0, skipping compiling th_moe_ops.cc because QUInt4x2 is supported after torch 1.9.0")
 endif()
+
+set(pybind11_DIR /opt/conda/lib/python3.8/site-packages/pybind11/share/cmake/pybind11)
+find_package(pybind11 REQUIRED) 
+
+add_definitions(-DTORCH_CUDA=1)
+add_executable(print_dequantize_bytes print_dequantize_bytes.cc)
+target_link_libraries(print_dequantize_bytes "${TORCH_LIBRARIES}" fpA_intB_gemm pybind11::embed)
+
+add_definitions(-DTORCH_CUDA=1)
+add_executable(gemm_dequantize_fp4 gemm_dequantize_fp4.cu)
+target_link_libraries(gemm_dequantize_fp4 "${TORCH_LIBRARIES}" cuda_utils moe_gemm_kernels fpA_intB_gemm logger pybind11::embed)
+
+add_library(test_dequant OBJECT test_dequant.cu)
+set_property(TARGET test_dequant PROPERTY CUDA_PTX_COMPILATION ON)

@@ -324,7 +324,7 @@ public:
 
     static Status can_implement(Arguments const& args)
     {
-        if (platform::is_same<uint8_t, ElementB>::value || platform::is_same<uint4b_t, ElementB>::value
+        if (platform::is_same<uint8_t, ElementB>::value || platform::is_same<uint4b_t, ElementB>::value ||
             platform::is_same<fp4_t, ElementB>::value || platform::is_same<nf4_t, ElementB>::value) {
             if (args.weight_scales == nullptr) {
                 CUTLASS_TRACE_HOST("MoeFCGemm::can_implement() - weight scales are required for uint8_t, uint4b_t, fp4_t and nf4_t");
