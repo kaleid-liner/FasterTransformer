@@ -120,10 +120,10 @@ void T5Encoder<T>::initialize()
                                                        custom_all_reduce_comm_,
                                                        enable_custom_all_reduce_);
     }
-    auto& config = GlobalConfig<T>::instance();
+    auto& config = GlobalConfig::instance();
     config.setDefault();
     config.print();
-    ffn_layer_->initFetcherContext(config.encoder_fetcher_mode, moe_k_, config.encoder_arena_size, "encoder");
+    ffn_layer_->initFetcherContext(config.encoder_fetcher_mode, moe_k_, config.arena_size);
     
     if (has_adapters()) {
         adapter_layer_ = new LinearAdapterLayer<T>(adapter_config_,

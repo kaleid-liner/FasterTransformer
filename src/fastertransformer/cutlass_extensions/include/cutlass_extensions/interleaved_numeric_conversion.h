@@ -456,7 +456,6 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint4b_t, N> {
 };
 
 // Specialization for fp4 and nf4. No faster algorithm. 
-// Fallback to use NumericArrayConverter.
 template<typename T>
 struct FastInterleavedAndBiasedNumericArrayConverter<T, fp4_t, 8> {
     using result_type = Array<T, 8>;
@@ -465,44 +464,6 @@ struct FastInterleavedAndBiasedNumericArrayConverter<T, fp4_t, 8> {
     CUTLASS_DEVICE
     static result_type convert(source_type const& source)
     {
-        NumericArrayConverter<T, fp4_t, 8> converter_;
-        return converter_(source);
-    }
-
-    CUTLASS_DEVICE
-    result_type operator()(source_type const& s)
-    {
-        return convert(s);
-    }
-};
-
-template<>
-struct FastInterleavedAndBiasedNumericArrayConverter<half_t, fp4_t, 8> {
-    using result_type = Array<half_t, 8>;
-    using source_type = Array<fp4_t, 8>;
-
-    CUTLASS_DEVICE
-    static result_type convert(source_type const& source)
-    {
-        static const uint16_t cuda_quant_map[16] = {
-            0x0,
-            0x1d55,
-            0x3955,
-            0x3c00,
-            0x3555,
-            0x3800,
-            0x3155,
-            0x3400,
-            0x8000,
-            0x9d55,
-            0xb955,
-            0xbc00,
-            0xb555,
-            0xb800,
-            0xb155,
-            0xb400
-        };
-
         result_type result;
 
         uint16_t*      h          = reinterpret_cast<uint16_t*>(&result);
@@ -513,8 +474,7 @@ struct FastInterleavedAndBiasedNumericArrayConverter<half_t, fp4_t, 8> {
 
         CUTLASS_PRAGMA_UNROLL
         for (int ii = 0; ii < 8; ++ii) {
-            h[ii] = cuda_quant_map[i4s & MASK];
-            // h[ii] = dDequantizeFP4Tree(i4s & MASK);
+            h[ii] = cuda_float_dequantize<T, 4, false>(i4s & MASK);
             i4s >>= 4;
         }
 
@@ -536,8 +496,21 @@ struct FastInterleavedAndBiasedNumericArrayConverter<T, nf4_t, 8> {
     CUTLASS_DEVICE
     static result_type convert(source_type const& source)
     {
-        NumericArrayConverter<T, nf4_t, 8> converter_;
-        return converter_(source);
+        result_type result;
+
+        uint16_t*      h          = reinterpret_cast<uint16_t*>(&result);
+        uint32_t const source_i4s = reinterpret_cast<uint32_t const&>(source);
+
+        static constexpr uint32_t MASK = 0x0f;
+        uint32_t i4s = source_i4s;
+
+        CUTLASS_PRAGMA_UNROLL
+        for (int ii = 0; ii < 8; ++ii) {
+            h[ii] = cuda_float_dequantize<T, 4, true>(i4s & MASK);
+            i4s >>= 4;
+        }
+
+        return result;
     }
 
     CUTLASS_DEVICE

@@ -107,7 +107,7 @@ class fixed_sized_cache
             if (cache_items_map.size() + 1 > max_cache_size)
             {
                 auto disp_candidate_key = cache_policy.ReplCandidate();
-                auto disp_elem_it = GetInternal(disp_candidate_key).first;
+                auto disp_elem_it = FindElem(disp_candidate_key);
                 repl = disp_elem_it->second;
 
                 Erase(disp_elem_it);

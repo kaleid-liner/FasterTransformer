@@ -1,0 +1,1 @@
+python /workspace/FasterTransformer/examples/pytorch/t5/utils/huggingface_switch_transformer_ckpt_convert.py -saved_dir /data/ft-switch-base-8 -in_file google/switch-base-8 -inference_tensor_para_size 1

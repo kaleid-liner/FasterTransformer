@@ -15,6 +15,7 @@
  */
 
 #include "src/fastertransformer/th_op/t5/T5EncoderOp.h"
+#include "src/fastertransformer/utils/config.h"
 
 namespace torch_ext {
 
@@ -86,120 +87,127 @@ FTT5Encoder<T>::FTT5Encoder(int64_t                        head_num,
     int dense_weight_index     = 0;  // the inter and out kernel has the same index
     int moe_dense_weight_index = 0;  // the moe inter and out kernel has the same index
 
-    for (int i = 0; i < _layer_num; i++) {
-        int local_num_layer = (int)(ceil(_layer_num * 1.0f / pipeline_para_.world_size_));
-        if (!(i < _layer_num && (i >= local_num_layer * pipeline_para_.rank_)
-              && (i < local_num_layer * (pipeline_para_.rank_ + 1)))) {
-            continue;
-        }
-
-        auto const  layer_index           = i - local_num_layer * pipeline_para_.rank_;
-        auto* const encoder_layer_weights = t5_encoder_weights.t5_encoder_layer_weights[i];
-        auto const  world_size            = tensor_para_.world_size_;
-
-        encoder_layer_weights->attn_layernorm_weights_.gamma = get_ptr<T>(_weights[0]) + _d_model * layer_index;
-        encoder_layer_weights->attention_weights_.query_weight.kernel =
-            get_ptr<T>(_weights[1]) + _d_model * hidden_dim / world_size * layer_index;
-        encoder_layer_weights->attention_weights_.key_weight.kernel =
-            get_ptr<T>(_weights[2]) + _d_model * hidden_dim / world_size * layer_index;
-        encoder_layer_weights->attention_weights_.value_weight.kernel =
-            get_ptr<T>(_weights[3]) + _d_model * hidden_dim / world_size * layer_index;
-        encoder_layer_weights->attention_weights_.attention_output_weight.kernel =
-            get_ptr<T>(_weights[4]) + hidden_dim / world_size * _d_model * layer_index;
-        encoder_layer_weights->ffn_layernorm_weights_.gamma = get_ptr<T>(_weights[5]) + _d_model * layer_index;
-        encoder_layer_weights->ffn_weights_.intermediate_weight.kernel =
-            get_ptr<T>(_weights[6]) + _d_model * _inter_size / world_size * dense_weight_index
-            + _expert_num * _d_model * _inter_size / world_size * moe_dense_weight_index;
-        if (use_gated_activation) {
-            encoder_layer_weights->ffn_weights_.intermediate_weight2.kernel =
-                get_ptr<T>(_weights[7]) + _d_model * _inter_size / world_size * layer_index;
-        }
-        encoder_layer_weights->ffn_weights_.output_weight.kernel =
-            get_ptr<T>(_weights[8]) + _inter_size / world_size * _d_model * dense_weight_index
-            + _expert_num * _d_model * _inter_size / world_size * moe_dense_weight_index;
-
-        if (_t5_with_bias) {
-            encoder_layer_weights->attn_layernorm_weights_.beta = get_ptr<T>(_weights[12]) + _d_model * layer_index;
-            encoder_layer_weights->attention_weights_.query_weight.bias =
-                get_ptr<T>(_weights[13]) + hidden_dim / world_size * layer_index;
-            encoder_layer_weights->attention_weights_.key_weight.bias =
-                get_ptr<T>(_weights[14]) + hidden_dim / world_size * layer_index;
-            encoder_layer_weights->attention_weights_.value_weight.bias =
-                get_ptr<T>(_weights[15]) + hidden_dim / world_size * layer_index;
-            encoder_layer_weights->attention_weights_.attention_output_weight.bias =
-                get_ptr<T>(_weights[16]) + _d_model * layer_index;
-            encoder_layer_weights->ffn_layernorm_weights_.beta = get_ptr<T>(_weights[17]) + _d_model * layer_index;
-            encoder_layer_weights->ffn_weights_.intermediate_weight.bias =
-                get_ptr<T>(_weights[18]) + _inter_size / world_size * dense_weight_index
-                + _expert_num * _inter_size / world_size * moe_dense_weight_index;
-
-            if (use_gated_activation) {
-                encoder_layer_weights->ffn_weights_.intermediate_weight2.bias =
-                    get_ptr<T>(_weights[19]) + _inter_size / world_size * layer_index;
+    ft::GlobalConfig::instance().setDefault();
+    const std::string& saved_dir = ft::GlobalConfig::instance().saved_dir;
+    if (saved_dir.empty()) {
+        for (int i = 0; i < _layer_num; i++) {
+            int local_num_layer = (int)(ceil(_layer_num * 1.0f / pipeline_para_.world_size_));
+            if (!(i < _layer_num && (i >= local_num_layer * pipeline_para_.rank_)
+                && (i < local_num_layer * (pipeline_para_.rank_ + 1)))) {
+                continue;
             }
 
-            encoder_layer_weights->ffn_weights_.output_weight.bias = get_ptr<T>(_weights[20])
-                                                                     + _d_model * dense_weight_index
-                                                                     + _expert_num * _d_model * moe_dense_weight_index;
+            auto const  layer_index           = i - local_num_layer * pipeline_para_.rank_;
+            auto* const encoder_layer_weights = t5_encoder_weights.t5_encoder_layer_weights[i];
+            auto const  world_size            = tensor_para_.world_size_;
+
+            encoder_layer_weights->attn_layernorm_weights_.gamma = get_ptr<T>(_weights[0]) + _d_model * layer_index;
+            encoder_layer_weights->attention_weights_.query_weight.kernel =
+                get_ptr<T>(_weights[1]) + _d_model * hidden_dim / world_size * layer_index;
+            encoder_layer_weights->attention_weights_.key_weight.kernel =
+                get_ptr<T>(_weights[2]) + _d_model * hidden_dim / world_size * layer_index;
+            encoder_layer_weights->attention_weights_.value_weight.kernel =
+                get_ptr<T>(_weights[3]) + _d_model * hidden_dim / world_size * layer_index;
+            encoder_layer_weights->attention_weights_.attention_output_weight.kernel =
+                get_ptr<T>(_weights[4]) + hidden_dim / world_size * _d_model * layer_index;
+            encoder_layer_weights->ffn_layernorm_weights_.gamma = get_ptr<T>(_weights[5]) + _d_model * layer_index;
+            encoder_layer_weights->ffn_weights_.intermediate_weight.kernel =
+                get_ptr<T>(_weights[6]) + _d_model * _inter_size / world_size * dense_weight_index
+                + _expert_num * _d_model * _inter_size / world_size * moe_dense_weight_index;
+            if (use_gated_activation) {
+                encoder_layer_weights->ffn_weights_.intermediate_weight2.kernel =
+                    get_ptr<T>(_weights[7]) + _d_model * _inter_size / world_size * layer_index;
+            }
+            encoder_layer_weights->ffn_weights_.output_weight.kernel =
+                get_ptr<T>(_weights[8]) + _inter_size / world_size * _d_model * dense_weight_index
+                + _expert_num * _d_model * _inter_size / world_size * moe_dense_weight_index;
+
+            if (_t5_with_bias) {
+                encoder_layer_weights->attn_layernorm_weights_.beta = get_ptr<T>(_weights[12]) + _d_model * layer_index;
+                encoder_layer_weights->attention_weights_.query_weight.bias =
+                    get_ptr<T>(_weights[13]) + hidden_dim / world_size * layer_index;
+                encoder_layer_weights->attention_weights_.key_weight.bias =
+                    get_ptr<T>(_weights[14]) + hidden_dim / world_size * layer_index;
+                encoder_layer_weights->attention_weights_.value_weight.bias =
+                    get_ptr<T>(_weights[15]) + hidden_dim / world_size * layer_index;
+                encoder_layer_weights->attention_weights_.attention_output_weight.bias =
+                    get_ptr<T>(_weights[16]) + _d_model * layer_index;
+                encoder_layer_weights->ffn_layernorm_weights_.beta = get_ptr<T>(_weights[17]) + _d_model * layer_index;
+                encoder_layer_weights->ffn_weights_.intermediate_weight.bias =
+                    get_ptr<T>(_weights[18]) + _inter_size / world_size * dense_weight_index
+                    + _expert_num * _inter_size / world_size * moe_dense_weight_index;
+
+                if (use_gated_activation) {
+                    encoder_layer_weights->ffn_weights_.intermediate_weight2.bias =
+                        get_ptr<T>(_weights[19]) + _inter_size / world_size * layer_index;
+                }
+
+                encoder_layer_weights->ffn_weights_.output_weight.bias = get_ptr<T>(_weights[20])
+                                                                        + _d_model * dense_weight_index
+                                                                        + _expert_num * _d_model * moe_dense_weight_index;
+            }
+
+            if (std::find(moe_layer_index.begin(), moe_layer_index.end(), i) == moe_layer_index.end()) {
+                dense_weight_index += 1;
+                // copy the weights of FFN to GPU memory
+                // For encoder_layer_weights->ffn_weights_.intermediate_weight.kernel
+                // and encoder_layer_weights->ffn_weights_.output_weight.kernel
+
+                T *gpu_buffer;
+                fastertransformer::check_cuda_error(
+                    cudaMalloc((void**)&gpu_buffer, _d_model * _inter_size * sizeof(T)));
+
+                fastertransformer::check_cuda_error(cudaMemcpy(gpu_buffer,
+                        encoder_layer_weights->ffn_weights_.intermediate_weight.kernel,
+                        _d_model * _inter_size * sizeof(T), cudaMemcpyHostToDevice));
+                
+                encoder_layer_weights->ffn_weights_.intermediate_weight.kernel = gpu_buffer;
+
+
+                fastertransformer::check_cuda_error(
+                    cudaMalloc((void**)&gpu_buffer, _inter_size * _d_model * sizeof(T)));
+                
+                fastertransformer::check_cuda_error(cudaMemcpy(gpu_buffer,
+                        encoder_layer_weights->ffn_weights_.output_weight.kernel,
+                        _inter_size * _d_model * sizeof(T), cudaMemcpyHostToDevice));
+
+                encoder_layer_weights->ffn_weights_.output_weight.kernel = gpu_buffer;
+            }
+
+            if (std::find(moe_layer_index.begin(), moe_layer_index.end(), i) != moe_layer_index.end()) {
+                encoder_layer_weights->ffn_weights_.gating_weight.kernel =
+                    get_ptr<T>(_weights[22]) + _d_model * _expert_num * moe_dense_weight_index;
+                moe_dense_weight_index += 1;
+            }
+
+            if (_adapter_inter_size > 0) {
+                auto& adapter_weights = encoder_layer_weights->adapter_weights_;
+                adapter_weights.setAdapterInterSize(_adapter_inter_size);
+                auto& attn_adapter_weights = adapter_weights.after_attention_adapter_weights_;
+                attn_adapter_weights.input_weight().kernel =
+                    get_ptr<T>(_weights[23]) + layer_index * d_model * _adapter_inter_size / world_size;
+                attn_adapter_weights.output_weight().kernel =
+                    get_ptr<T>(_weights[24]) + layer_index * d_model * _adapter_inter_size / world_size;
+                attn_adapter_weights.layer_norm_weight.gamma = get_ptr<T>(_weights[25]) + layer_index * d_model;
+                attn_adapter_weights.layer_norm_weight.beta  = get_ptr<T>(_weights[26]) + layer_index * d_model;
+                auto& ffn_adapter_weights                    = adapter_weights.after_ffn_adapter_weights_;
+                ffn_adapter_weights.input_weight().kernel =
+                    get_ptr<T>(_weights[27]) + layer_index * d_model * _adapter_inter_size / world_size;
+                ffn_adapter_weights.output_weight().kernel =
+                    get_ptr<T>(_weights[28]) + layer_index * d_model * _adapter_inter_size / world_size;
+                ffn_adapter_weights.layer_norm_weight.gamma = get_ptr<T>(_weights[29]) + layer_index * d_model;
+                ffn_adapter_weights.layer_norm_weight.beta  = get_ptr<T>(_weights[30]) + layer_index * d_model;
+            }
         }
-
-        if (std::find(moe_layer_index.begin(), moe_layer_index.end(), i) == moe_layer_index.end()) {
-            dense_weight_index += 1;
-            // copy the weights of FFN to GPU memory
-            // For encoder_layer_weights->ffn_weights_.intermediate_weight.kernel
-            // and encoder_layer_weights->ffn_weights_.output_weight.kernel
-
-            T *gpu_buffer;
-            fastertransformer::check_cuda_error(
-                cudaMalloc((void**)&gpu_buffer, _d_model * _inter_size * sizeof(T)));
-
-            fastertransformer::check_cuda_error(cudaMemcpy(gpu_buffer,
-                       encoder_layer_weights->ffn_weights_.intermediate_weight.kernel,
-                       _d_model * _inter_size * sizeof(T), cudaMemcpyHostToDevice));
-            
-            encoder_layer_weights->ffn_weights_.intermediate_weight.kernel = gpu_buffer;
-
-
-            fastertransformer::check_cuda_error(
-                cudaMalloc((void**)&gpu_buffer, _inter_size * _d_model * sizeof(T)));
-            
-            fastertransformer::check_cuda_error(cudaMemcpy(gpu_buffer,
-                       encoder_layer_weights->ffn_weights_.output_weight.kernel,
-                       _inter_size * _d_model * sizeof(T), cudaMemcpyHostToDevice));
-
-            encoder_layer_weights->ffn_weights_.output_weight.kernel = gpu_buffer;
+        t5_encoder_weights.post_transformer_layernorm_weights.gamma = get_ptr<T>(_weights[9]);
+        t5_encoder_weights.absolute_or_relative_position_embedding  = get_ptr<T>(_weights[10]);
+        t5_encoder_weights.embedding_table                          = get_ptr<T>(_weights[11]);
+        if (_t5_with_bias) {
+            t5_encoder_weights.post_transformer_layernorm_weights.beta = get_ptr<T>(_weights[21]);
         }
-
-        if (std::find(moe_layer_index.begin(), moe_layer_index.end(), i) != moe_layer_index.end()) {
-            encoder_layer_weights->ffn_weights_.gating_weight.kernel =
-                get_ptr<T>(_weights[22]) + _d_model * _expert_num * moe_dense_weight_index;
-            moe_dense_weight_index += 1;
-        }
-
-        if (_adapter_inter_size > 0) {
-            auto& adapter_weights = encoder_layer_weights->adapter_weights_;
-            adapter_weights.setAdapterInterSize(_adapter_inter_size);
-            auto& attn_adapter_weights = adapter_weights.after_attention_adapter_weights_;
-            attn_adapter_weights.input_weight().kernel =
-                get_ptr<T>(_weights[23]) + layer_index * d_model * _adapter_inter_size / world_size;
-            attn_adapter_weights.output_weight().kernel =
-                get_ptr<T>(_weights[24]) + layer_index * d_model * _adapter_inter_size / world_size;
-            attn_adapter_weights.layer_norm_weight.gamma = get_ptr<T>(_weights[25]) + layer_index * d_model;
-            attn_adapter_weights.layer_norm_weight.beta  = get_ptr<T>(_weights[26]) + layer_index * d_model;
-            auto& ffn_adapter_weights                    = adapter_weights.after_ffn_adapter_weights_;
-            ffn_adapter_weights.input_weight().kernel =
-                get_ptr<T>(_weights[27]) + layer_index * d_model * _adapter_inter_size / world_size;
-            ffn_adapter_weights.output_weight().kernel =
-                get_ptr<T>(_weights[28]) + layer_index * d_model * _adapter_inter_size / world_size;
-            ffn_adapter_weights.layer_norm_weight.gamma = get_ptr<T>(_weights[29]) + layer_index * d_model;
-            ffn_adapter_weights.layer_norm_weight.beta  = get_ptr<T>(_weights[30]) + layer_index * d_model;
-        }
-    }
-    t5_encoder_weights.post_transformer_layernorm_weights.gamma = get_ptr<T>(_weights[9]);
-    t5_encoder_weights.absolute_or_relative_position_embedding  = get_ptr<T>(_weights[10]);
-    t5_encoder_weights.embedding_table                          = get_ptr<T>(_weights[11]);
-    if (_t5_with_bias) {
-        t5_encoder_weights.post_transformer_layernorm_weights.beta = get_ptr<T>(_weights[21]);
+    } else {
+        std::cout << "Encoder load model from " << saved_dir << std::endl;
+        t5_encoder_weights.loadModel(saved_dir);
     }
 
 #ifdef SPARSITY_ENABLED

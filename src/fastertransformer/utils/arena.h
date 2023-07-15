@@ -8,9 +8,11 @@
 #include <functional>
 #include <future>
 #include <fstream>
+#include <algorithm>
 #include "src/fastertransformer/utils/cuda_utils.h"
 #include "src/fastertransformer/utils/config.h"
 #include "src/fastertransformer/utils/profiling.h"
+#include "src/fastertransformer/utils/memory_utils.h"
 #include "cache.h"
 #include "cache_policy.h"
 #include "lru_cache_policy.h"
@@ -20,7 +22,7 @@ namespace fastertransformer {
 template <typename T>
 class MemoryArena {
 public:
-    using tag_t = int64_t;
+    using tag_t = std::string;
 
     MemoryArena(size_t size, size_t chunk_size, cudaStream_t stream) 
         : chunk_size_(chunk_size), 
@@ -39,11 +41,11 @@ public:
         ptr_ = mallocBuffer(chunk_size_, chunk_num_);
         // Pre-cache
         // This is a workaround, currently this process is necessary
-        for (tag_t t = 0; t < chunk_num_; t++) {
-            cache_->Put(-(t + 1), (T*)((char*)ptr_ + pitch_sizes_[chunk_size_] * t));
+        for (int t = 0; t < chunk_num_; t++) {
+            cache_->Put(std::to_string(t), (T*)((char*)ptr_ + pitch_sizes_[chunk_size_] * t));
         }
 
-        if (GlobalConfig<T>::instance().disk_offload) {
+        if (GlobalConfig::instance().disk_offload) {
             offload_buffer_ = new char[chunk_size_ * sizeof(T)];
         }
     }
@@ -76,7 +78,9 @@ public:
 
     // Allocate a chunk
     // note: tag < 0 is reserved
-    std::future<void> allocate(tag_t tag, T* dst = nullptr, const T* src = nullptr);
+    // post_callback is used to do further operations on cached data
+    std::future<void> allocate(const tag_t& tag, T* dst = nullptr, const T* src = nullptr, 
+                               std::function<void(const T*, cudaStream_t)> post_callback = nullptr);
 
     // Wait until all previous work is done
     void synchronize()
@@ -119,37 +123,56 @@ private:
     std::unordered_map<size_t, size_t> pitch_sizes_;
 };
 
-template <typename T>
 class GroupedMemoryArena {
 public:
-    using tag_t = typename MemoryArena<T>::tag_t;
+    using tag_t = typename MemoryArena<char>::tag_t;
 
-    static void createMemoryArena(const std::string& group, size_t size, size_t chunk_size, cudaStream_t stream)
+    void init(size_t size, const std::vector<size_t>& tensor_sizes, cudaStream_t stream)
     {
-        if (arenas_ == nullptr) {
-            arenas_ = std::make_unique<std::unordered_map<std::string, MemoryArena<T>>>();
+        tensor_sizes_ = tensor_sizes;
+        size_t chunk_size = std::accumulate(tensor_sizes_.begin(), tensor_sizes_.end(), 0);
+        arena_ = std::make_unique<MemoryArena<char>>(size, chunk_size, stream);
+    }
+
+    void initIfUninit(size_t size, const std::vector<size_t>& tensor_sizes, cudaStream_t stream)
+    {
+        if (arena_ != nullptr) {
+            init(size, tensor_sizes, stream);
         }
-        auto iter = arenas_->find(group);
-        if (iter != arenas_->end()) {
-            arenas_->erase(iter);
+    }
+
+    std::future<void> allocate(const tag_t& tag, const std::vector<char*>& dsts, const char* src = nullptr)
+    {
+        FT_CHECK_WITH_INFO(arena_ != nullptr, "Memory arena uninitialized.");
+        auto post_callback = [](const char* cached_ptr, cudaStream_t stream) {
+            FT_CHECK(dsts.size() == tensor_sizes_.size());
+            const char* ptr = cached_ptr;
+            for (int i = 0; i < dsts.size(); ++i)
+                invokeCudaD2DcpyConvert<char, char>(dsts[i], ptr, tensor_sizes_[i], stream_);
+                ptr += tensor_sizes_[i];
+            }
         }
-        arenas_->emplace(group, MemoryArena<T>(size, chunk_size, stream));
+        return arena_->allocate(tag, nullptr, src, post_callback);
     }
 
-    static std::future<void> allocate(const std::string& group, tag_t tag, T* dst = nullptr, const T* src = nullptr)
+    char* mallocBuffer(size_t width, size_t height)
     {
-        return arenas_->at(group).allocate(tag, dst, src);
+        FT_CHECK_WITH_INFO(arena_ != nullptr, "Memory arena uninitialized.");
+        return arena_->mallocBuffer(width, height);
     }
 
-    static T* mallocBuffer(const std::string& group, size_t width, size_t height)
+    static GroupedMemoryArena& instance()
     {
-        return arenas_->at(group).mallocBuffer(width, height);
+        static GroupedMemoryArena instance;
+        return instance;
     }
+
 private:
-    static std::unique_ptr<std::unordered_map<std::string, MemoryArena<T>>> arenas_;
-};
+    GroupedMemoryArena() {}
 
-template <typename T>
-std::unique_ptr<std::unordered_map<std::string, MemoryArena<T>>> GroupedMemoryArena<T>::arenas_ = nullptr;
+    std::unique_ptr<MemoryArena<char>> arena_;
+
+    std::vector<size_t> tensor_sizes_;
+};
 
 }  // namespace fastertransformer

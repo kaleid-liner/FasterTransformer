@@ -112,10 +112,10 @@ void T5Decoder<T>::initialize()
                                                        enable_custom_all_reduce_);
     }
 
-    auto& config = GlobalConfig<T>::instance();
+    auto& config = GlobalConfig::instance();
     config.setDefault();
     config.print();
-    ffn_layer_->initFetcherContext(config.decoder_fetcher_mode, moe_k_, config.decoder_arena_size, "decoder");
+    ffn_layer_->initFetcherContext(config.decoder_fetcher_mode, moe_k_, config.arena_size);
     // ffn_layer_->initFetcherContext(FETCH_ON_DEMAND, moe_k_);
     
     // when enable this option, make sure all weights are placed in GPU

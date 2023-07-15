@@ -6,7 +6,9 @@ python /workspace/FasterTransformer/examples/pytorch/t5/perf_benchmark.py \
         --test_time 3 \
         --sampling_topk 1 \
         --model_type Megatron-DeepSpeed \
-        --ckpt_path /workspace/FasterTransformer/fake_t5_moe_ckpt \
+        --ckpt_path /workspace/FasterTransformer/fake_t5_moe_ckpt/ \
         --model t5-base \
         --duration 0 \
         --iterations 4
+
+#        --ckpt_path /data/ft-switch-base-8/1-gpu/ \

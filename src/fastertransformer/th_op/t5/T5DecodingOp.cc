@@ -15,6 +15,7 @@
  */
 
 #include "src/fastertransformer/th_op/t5/T5DecodingOp.h"
+#include "src/fastertransformer/utils/config.h"
 
 namespace th = torch;
 
@@ -82,132 +83,140 @@ FTT5Decoding<T>::FTT5Decoding(int64_t                        head_num,
     int dense_weight_index     = 0;  // the inter and out kernel has the same index
     int moe_dense_weight_index = 0;  // the moe inter and out kernel has the same index
 
-    for (int i = 0; i < layer_num_; ++i) {
-        int local_num_layer = (int)(ceil(layer_num_ * 1.0f / pipeline_para_.world_size_));
-        if (!(i < layer_num_ && (i >= local_num_layer * pipeline_para_.rank_)
-              && (i < local_num_layer * (pipeline_para_.rank_ + 1)))) {
-            continue;
-        }
-
-        auto const  layer_index           = i - local_num_layer * pipeline_para_.rank_;
-        auto* const decoder_layer_weights = decoding_weights.decoder_layer_weights[i];
-        auto const  world_size            = tensor_para_.world_size_;
-
-        decoder_layer_weights->pre_layernorm_weights.gamma = get_ptr<T>(_weights[0]) + layer_index * d_model;
-        decoder_layer_weights->self_attention_weights.query_weight.kernel =
-            get_ptr<T>(_weights[1]) + layer_index * d_model * 3 * hidden_dim / world_size;
-        decoder_layer_weights->self_attention_weights.attention_output_weight.kernel =
-            get_ptr<T>(_weights[2]) + layer_index * hidden_dim / world_size * d_model;
-        decoder_layer_weights->self_attn_layernorm_weights.gamma = get_ptr<T>(_weights[3]) + layer_index * d_model;
-        decoder_layer_weights->cross_attention_weights.query_weight.kernel =
-            get_ptr<T>(_weights[4]) + layer_index * d_model * hidden_dim / world_size;
-        decoder_layer_weights->cross_attention_weights.key_weight.kernel =
-            get_ptr<T>(_weights[5]) + layer_index * mem_d_model * hidden_dim / world_size;
-        decoder_layer_weights->cross_attention_weights.value_weight.kernel =
-            get_ptr<T>(_weights[6]) + layer_index * mem_d_model * hidden_dim / world_size;
-        decoder_layer_weights->cross_attention_weights.attention_output_weight.kernel =
-            get_ptr<T>(_weights[7]) + layer_index * hidden_dim / world_size * d_model;
-        decoder_layer_weights->cross_attn_layernorm_weights.gamma = get_ptr<T>(_weights[8]) + layer_index * d_model;
-        decoder_layer_weights->ffn_weights.intermediate_weight.kernel =
-            get_ptr<T>(_weights[9]) + dense_weight_index * d_model * inter_size_ / world_size
-            + moe_dense_weight_index * expert_num_ * d_model * inter_size_ / world_size;
-
-        if (use_gated_activation) {
-            decoder_layer_weights->ffn_weights.intermediate_weight2.kernel =
-                get_ptr<T>(_weights[10]) + dense_weight_index * d_model * inter_size_ / world_size;
-        }
-
-        decoder_layer_weights->ffn_weights.output_weight.kernel =
-            get_ptr<T>(_weights[11]) + dense_weight_index * inter_size_ / world_size * d_model
-            + moe_dense_weight_index * expert_num_ * inter_size_ / world_size * d_model;
-
-        if (t5_with_bias_) {
-            decoder_layer_weights->pre_layernorm_weights.beta = get_ptr<T>(_weights[16]) + layer_index * d_model;
-            decoder_layer_weights->self_attention_weights.query_weight.bias =
-                get_ptr<T>(_weights[17]) + layer_index * 3 * hidden_dim / world_size;
-            decoder_layer_weights->self_attention_weights.attention_output_weight.bias =
-                get_ptr<T>(_weights[18]) + layer_index * d_model;
-            decoder_layer_weights->self_attn_layernorm_weights.beta = get_ptr<T>(_weights[19]) + layer_index * d_model;
-            decoder_layer_weights->cross_attention_weights.query_weight.bias =
-                get_ptr<T>(_weights[20]) + layer_index * hidden_dim / world_size;
-            decoder_layer_weights->cross_attention_weights.key_weight.bias =
-                get_ptr<T>(_weights[21]) + layer_index * hidden_dim / world_size;
-            decoder_layer_weights->cross_attention_weights.value_weight.bias =
-                get_ptr<T>(_weights[22]) + layer_index * hidden_dim / world_size;
-            decoder_layer_weights->cross_attention_weights.attention_output_weight.bias =
-                get_ptr<T>(_weights[23]) + layer_index * d_model;
-            decoder_layer_weights->cross_attn_layernorm_weights.beta = get_ptr<T>(_weights[24]) + layer_index * d_model;
-            decoder_layer_weights->ffn_weights.intermediate_weight.bias =
-                get_ptr<T>(_weights[25]) + dense_weight_index * inter_size_ / world_size
-                + moe_dense_weight_index * expert_num_ * inter_size_ / world_size;
-
-            if (use_gated_activation) {
-                decoder_layer_weights->ffn_weights.intermediate_weight2.bias =
-                    get_ptr<T>(_weights[26]) + layer_index * inter_size_ / world_size;
+    ft::GlobalConfig::instance().setDefault();
+    const std::string& saved_dir = ft::GlobalConfig::instance().saved_dir;
+    if (saved_dir.empty()) {
+        for (int i = 0; i < layer_num_; ++i) {
+            int local_num_layer = (int)(ceil(layer_num_ * 1.0f / pipeline_para_.world_size_));
+            if (!(i < layer_num_ && (i >= local_num_layer * pipeline_para_.rank_)
+                && (i < local_num_layer * (pipeline_para_.rank_ + 1)))) {
+                continue;
             }
 
-            decoder_layer_weights->ffn_weights.output_weight.bias = get_ptr<T>(_weights[27])
-                                                                    + dense_weight_index * d_model
-                                                                    + moe_dense_weight_index * expert_num_ * d_model;
+            auto const  layer_index           = i - local_num_layer * pipeline_para_.rank_;
+            auto* const decoder_layer_weights = decoding_weights.decoder_layer_weights[i];
+            auto const  world_size            = tensor_para_.world_size_;
+
+            decoder_layer_weights->pre_layernorm_weights.gamma = get_ptr<T>(_weights[0]) + layer_index * d_model;
+            decoder_layer_weights->self_attention_weights.query_weight.kernel =
+                get_ptr<T>(_weights[1]) + layer_index * d_model * 3 * hidden_dim / world_size;
+            decoder_layer_weights->self_attention_weights.attention_output_weight.kernel =
+                get_ptr<T>(_weights[2]) + layer_index * hidden_dim / world_size * d_model;
+            decoder_layer_weights->self_attn_layernorm_weights.gamma = get_ptr<T>(_weights[3]) + layer_index * d_model;
+            decoder_layer_weights->cross_attention_weights.query_weight.kernel =
+                get_ptr<T>(_weights[4]) + layer_index * d_model * hidden_dim / world_size;
+            decoder_layer_weights->cross_attention_weights.key_weight.kernel =
+                get_ptr<T>(_weights[5]) + layer_index * mem_d_model * hidden_dim / world_size;
+            decoder_layer_weights->cross_attention_weights.value_weight.kernel =
+                get_ptr<T>(_weights[6]) + layer_index * mem_d_model * hidden_dim / world_size;
+            decoder_layer_weights->cross_attention_weights.attention_output_weight.kernel =
+                get_ptr<T>(_weights[7]) + layer_index * hidden_dim / world_size * d_model;
+            decoder_layer_weights->cross_attn_layernorm_weights.gamma = get_ptr<T>(_weights[8]) + layer_index * d_model;
+            decoder_layer_weights->ffn_weights.intermediate_weight.kernel =
+                get_ptr<T>(_weights[9]) + dense_weight_index * d_model * inter_size_ / world_size
+                + moe_dense_weight_index * expert_num_ * d_model * inter_size_ / world_size;
+
+            if (use_gated_activation) {
+                decoder_layer_weights->ffn_weights.intermediate_weight2.kernel =
+                    get_ptr<T>(_weights[10]) + dense_weight_index * d_model * inter_size_ / world_size;
+            }
+
+            decoder_layer_weights->ffn_weights.output_weight.kernel =
+                get_ptr<T>(_weights[11]) + dense_weight_index * inter_size_ / world_size * d_model
+                + moe_dense_weight_index * expert_num_ * inter_size_ / world_size * d_model;
+
+            if (t5_with_bias_) {
+                decoder_layer_weights->pre_layernorm_weights.beta = get_ptr<T>(_weights[16]) + layer_index * d_model;
+                decoder_layer_weights->self_attention_weights.query_weight.bias =
+                    get_ptr<T>(_weights[17]) + layer_index * 3 * hidden_dim / world_size;
+                decoder_layer_weights->self_attention_weights.attention_output_weight.bias =
+                    get_ptr<T>(_weights[18]) + layer_index * d_model;
+                decoder_layer_weights->self_attn_layernorm_weights.beta = get_ptr<T>(_weights[19]) + layer_index * d_model;
+                decoder_layer_weights->cross_attention_weights.query_weight.bias =
+                    get_ptr<T>(_weights[20]) + layer_index * hidden_dim / world_size;
+                decoder_layer_weights->cross_attention_weights.key_weight.bias =
+                    get_ptr<T>(_weights[21]) + layer_index * hidden_dim / world_size;
+                decoder_layer_weights->cross_attention_weights.value_weight.bias =
+                    get_ptr<T>(_weights[22]) + layer_index * hidden_dim / world_size;
+                decoder_layer_weights->cross_attention_weights.attention_output_weight.bias =
+                    get_ptr<T>(_weights[23]) + layer_index * d_model;
+                decoder_layer_weights->cross_attn_layernorm_weights.beta = get_ptr<T>(_weights[24]) + layer_index * d_model;
+                decoder_layer_weights->ffn_weights.intermediate_weight.bias =
+                    get_ptr<T>(_weights[25]) + dense_weight_index * inter_size_ / world_size
+                    + moe_dense_weight_index * expert_num_ * inter_size_ / world_size;
+
+                if (use_gated_activation) {
+                    decoder_layer_weights->ffn_weights.intermediate_weight2.bias =
+                        get_ptr<T>(_weights[26]) + layer_index * inter_size_ / world_size;
+                }
+
+                decoder_layer_weights->ffn_weights.output_weight.bias = get_ptr<T>(_weights[27])
+                                                                        + dense_weight_index * d_model
+                                                                        + moe_dense_weight_index * expert_num_ * d_model;
+            }
+
+            if (std::find(moe_layer_index.begin(), moe_layer_index.end(), i) == moe_layer_index.end()) {
+                dense_weight_index += 1;
+
+
+                T *gpu_buffer;
+                fastertransformer::check_cuda_error(
+                    cudaMalloc((void**)&gpu_buffer, d_model * inter_size * sizeof(T)));
+
+                fastertransformer::check_cuda_error(cudaMemcpy(gpu_buffer,
+                        decoder_layer_weights->ffn_weights.intermediate_weight.kernel,
+                        d_model * inter_size * sizeof(T), cudaMemcpyHostToDevice));
+                
+                decoder_layer_weights->ffn_weights.intermediate_weight.kernel = gpu_buffer;
+
+
+                fastertransformer::check_cuda_error(
+                    cudaMalloc((void**)&gpu_buffer, inter_size * d_model * sizeof(T)));
+                
+                fastertransformer::check_cuda_error(cudaMemcpy(gpu_buffer,
+                        decoder_layer_weights->ffn_weights.output_weight.kernel,
+                        inter_size * d_model * sizeof(T), cudaMemcpyHostToDevice));
+                decoder_layer_weights->ffn_weights.output_weight.kernel = gpu_buffer;
+            }
+
+            if (std::find(moe_layer_index.begin(), moe_layer_index.end(), i) != moe_layer_index.end()) {
+                decoder_layer_weights->ffn_weights.gating_weight.kernel =
+                    get_ptr<T>(_weights[30]) + moe_dense_weight_index * d_model * expert_num_;
+                moe_dense_weight_index += 1;
+            }
+
+            if (adapter_inter_size_ > 0) {
+                auto& adapter_weights = decoder_layer_weights->adapter_weights_;
+                adapter_weights.setAdapterInterSize(adapter_inter_size_);
+                auto& attn_adapter_weights = adapter_weights.after_attention_adapter_weights_;
+                attn_adapter_weights.input_weight().kernel =
+                    get_ptr<T>(_weights[31]) + layer_index * d_model * adapter_inter_size_ / world_size;
+                attn_adapter_weights.output_weight().kernel =
+                    get_ptr<T>(_weights[32]) + layer_index * d_model * adapter_inter_size_ / world_size;
+                attn_adapter_weights.layer_norm_weight.gamma = get_ptr<T>(_weights[33]) + layer_index * d_model;
+                attn_adapter_weights.layer_norm_weight.beta  = get_ptr<T>(_weights[34]) + layer_index * d_model;
+                auto& ffn_adapter_weights                    = adapter_weights.after_ffn_adapter_weights_;
+                ffn_adapter_weights.input_weight().kernel =
+                    get_ptr<T>(_weights[35]) + layer_index * d_model * adapter_inter_size_ / world_size;
+                ffn_adapter_weights.output_weight().kernel =
+                    get_ptr<T>(_weights[36]) + layer_index * d_model * adapter_inter_size_ / world_size;
+                ffn_adapter_weights.layer_norm_weight.gamma = get_ptr<T>(_weights[37]) + layer_index * d_model;
+                ffn_adapter_weights.layer_norm_weight.beta  = get_ptr<T>(_weights[38]) + layer_index * d_model;
+            }
         }
-
-        if (std::find(moe_layer_index.begin(), moe_layer_index.end(), i) == moe_layer_index.end()) {
-            dense_weight_index += 1;
-
-
-            T *gpu_buffer;
-            fastertransformer::check_cuda_error(
-                cudaMalloc((void**)&gpu_buffer, d_model * inter_size * sizeof(T)));
-
-            fastertransformer::check_cuda_error(cudaMemcpy(gpu_buffer,
-                       decoder_layer_weights->ffn_weights.intermediate_weight.kernel,
-                       d_model * inter_size * sizeof(T), cudaMemcpyHostToDevice));
-            
-            decoder_layer_weights->ffn_weights.intermediate_weight.kernel = gpu_buffer;
-
-
-            fastertransformer::check_cuda_error(
-                cudaMalloc((void**)&gpu_buffer, inter_size * d_model * sizeof(T)));
-            
-            fastertransformer::check_cuda_error(cudaMemcpy(gpu_buffer,
-                       decoder_layer_weights->ffn_weights.output_weight.kernel,
-                       inter_size * d_model * sizeof(T), cudaMemcpyHostToDevice));
-            decoder_layer_weights->ffn_weights.output_weight.kernel = gpu_buffer;
+        decoding_weights.post_decoder_layernorm.gamma            = get_ptr<T>(_weights[12]);
+        decoding_weights.pre_decoder_embedding_table             = get_ptr<T>(_weights[13]);
+        decoding_weights.post_decoder_embedding.kernel           = get_ptr<T>(_weights[14]);
+        decoding_weights.absolute_or_relative_position_embedding = get_ptr<T>(_weights[15]);
+        if (t5_with_bias_) {
+            decoding_weights.post_decoder_layernorm.beta = get_ptr<T>(_weights[28]);
+            decoding_weights.post_decoder_embedding.bias = get_ptr<T>(_weights[29]);
         }
-
-        if (std::find(moe_layer_index.begin(), moe_layer_index.end(), i) != moe_layer_index.end()) {
-            decoder_layer_weights->ffn_weights.gating_weight.kernel =
-                get_ptr<T>(_weights[30]) + moe_dense_weight_index * d_model * expert_num_;
-            moe_dense_weight_index += 1;
-        }
-
-        if (adapter_inter_size_ > 0) {
-            auto& adapter_weights = decoder_layer_weights->adapter_weights_;
-            adapter_weights.setAdapterInterSize(adapter_inter_size_);
-            auto& attn_adapter_weights = adapter_weights.after_attention_adapter_weights_;
-            attn_adapter_weights.input_weight().kernel =
-                get_ptr<T>(_weights[31]) + layer_index * d_model * adapter_inter_size_ / world_size;
-            attn_adapter_weights.output_weight().kernel =
-                get_ptr<T>(_weights[32]) + layer_index * d_model * adapter_inter_size_ / world_size;
-            attn_adapter_weights.layer_norm_weight.gamma = get_ptr<T>(_weights[33]) + layer_index * d_model;
-            attn_adapter_weights.layer_norm_weight.beta  = get_ptr<T>(_weights[34]) + layer_index * d_model;
-            auto& ffn_adapter_weights                    = adapter_weights.after_ffn_adapter_weights_;
-            ffn_adapter_weights.input_weight().kernel =
-                get_ptr<T>(_weights[35]) + layer_index * d_model * adapter_inter_size_ / world_size;
-            ffn_adapter_weights.output_weight().kernel =
-                get_ptr<T>(_weights[36]) + layer_index * d_model * adapter_inter_size_ / world_size;
-            ffn_adapter_weights.layer_norm_weight.gamma = get_ptr<T>(_weights[37]) + layer_index * d_model;
-            ffn_adapter_weights.layer_norm_weight.beta  = get_ptr<T>(_weights[38]) + layer_index * d_model;
-        }
+    } else {
+        std::cout << "Decoder load model from " << saved_dir << std::endl;
+        decoding_weights.loadModel(saved_dir);
     }
-    decoding_weights.post_decoder_layernorm.gamma            = get_ptr<T>(_weights[12]);
-    decoding_weights.pre_decoder_embedding_table             = get_ptr<T>(_weights[13]);
-    decoding_weights.post_decoder_embedding.kernel           = get_ptr<T>(_weights[14]);
-    decoding_weights.absolute_or_relative_position_embedding = get_ptr<T>(_weights[15]);
-    if (t5_with_bias_) {
-        decoding_weights.post_decoder_layernorm.beta = get_ptr<T>(_weights[28]);
-        decoding_weights.post_decoder_embedding.bias = get_ptr<T>(_weights[29]);
-    }
+
     int device_id = 0;
     ft::check_cuda_error(cudaGetDevice(&device_id));
     ft::check_cuda_error(cudaGetDeviceProperties(&prop_, device_id));

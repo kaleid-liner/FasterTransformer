@@ -57,6 +57,9 @@ private:
     std::shared_ptr<CutlassFpAIntBGemmRunner<T, uint8_t>> weight_only_int8_fc_runner_;
     std::shared_ptr<CutlassInt8GemmRunner<T>>             int8_fc_runner_;
 
+    std::shared_ptr<CutlassFpAIntBGemmRunner<T, cutlass::uint4b_t>> weight_only_int4_fc_runner_;
+    std::shared_ptr<CutlassMoeFCRunner<T, cutlass::uint4b_t>> moe_int4_weight_only_fc_runner_;
+
     void allocateBuffer() override;
     void freeBuffer() override;
     void allocateBuffer(int moe_k = 0, bool use_moe = false);

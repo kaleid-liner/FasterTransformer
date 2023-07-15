@@ -699,7 +699,8 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
 {
     FT_LOG_DEBUG(__PRETTY_FUNCTION__);
     static constexpr bool scales_required =
-        std::is_same<WeightType, uint8_t>::value || std::is_same<WeightType, cutlass::uint4b_t>::value;
+        std::is_same<WeightType, uint8_t>::value || std::is_same<WeightType, cutlass::uint4b_t>::value ||
+        std::is_same<WeightType, fp4_t>::value || std::is_same<WeightType, cutlass::nf4_t>::value;
     FT_LOG_TRACE("scales_required: %d", scales_required);
     if (scales_required) {
         if (fc1_scales == nullptr) {
@@ -939,7 +940,7 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
 #endif
 
     FT_LOG_TRACE("=== milestone run_moe_fc 7 ===");
-    if (GlobalConfig<T>::instance().profiling) {
+    if (GlobalConfig::instance().profiling) {
         Profiling::instance().insert(stream, EventType::COMP_START);
     }
     moe_gemm_runner_.moe_gemm_bias_act(permuted_data_,              // [k * num_rows, hidden_size] input
@@ -971,7 +972,7 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
                               inter_size,
                               num_experts,
                               stream);
-    if (GlobalConfig<T>::instance().profiling) {
+    if (GlobalConfig::instance().profiling) {
         Profiling::instance().insert(stream, EventType::COMP_END);
     }
     FT_LOG_TRACE("=== milestone run_moe_fc 9 ===");
@@ -1255,11 +1256,15 @@ template class CutlassMoeFCRunner<float, float>;
 template class CutlassMoeFCRunner<__nv_bfloat16, __nv_bfloat16>;
 template class CutlassMoeFCRunner<__nv_bfloat16, uint8_t>;
 template class CutlassMoeFCRunner<__nv_bfloat16, cutlass::uint4b_t>;
+template class CutlassMoeFCRunner<__nv_bfloat16, cutlass::fp4_t>;
+template class CutlassMoeFCRunner<__nv_bfloat16, cutlass::nf4_t>;
 #endif
 
 template class CutlassMoeFCRunner<half, half>;
 template class CutlassMoeFCRunner<half, uint8_t>;
 template class CutlassMoeFCRunner<half, cutlass::uint4b_t>;
+template class CutlassMoeFCRunner<half, cutlass::fp4_t>;
+template class CutlassMoeFCRunner<half, cutlass::nf4_t>;
 
 // ===================== Specializations for init routing =========================
 template void initialize_moe_routing_kernelLauncher(

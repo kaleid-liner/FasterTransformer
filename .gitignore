@@ -17,3 +17,5 @@ docker_mount/
 
 /3rdparty/NeMo/
 /3rdparty/apex/
+
+*.log
