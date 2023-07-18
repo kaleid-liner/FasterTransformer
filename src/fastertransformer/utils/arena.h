@@ -13,6 +13,7 @@
 #include "src/fastertransformer/utils/config.h"
 #include "src/fastertransformer/utils/profiling.h"
 #include "src/fastertransformer/utils/memory_utils.h"
+#include "src/fastertransformer/utils/ctpl_stl.h"
 #include "cache.h"
 #include "cache_policy.h"
 #include "lru_cache_policy.h"
@@ -32,7 +33,8 @@ public:
           cache_(nullptr),
           stream_(stream),
           offload_buffer_(nullptr),
-          pitch_sizes_()
+          pitch_sizes_(),
+          pool_(nullptr)
     {
         chunk_num_ = size_ / chunk_size_;
         cache_ = std::make_shared<cache_t>(chunk_num_);
@@ -45,9 +47,11 @@ public:
             cache_->Put(std::to_string(t), (T*)((char*)ptr_ + pitch_sizes_[chunk_size_] * t));
         }
 
-        if (GlobalConfig::instance().disk_offload) {
-            offload_buffer_ = new char[chunk_size_ * sizeof(T)];
+        if (!GlobalConfig::instance().offload_path.empty()) {
+            check_cuda_error(cudaMallocHost(&offload_buffer_, chunk_size_ * sizeof(T)));
         }
+
+        pool_ = std::make_shared<ctpl::thread_pool>(1);
     }
 
     MemoryArena(const MemoryArena& o) = delete;
@@ -60,20 +64,24 @@ public:
           cache_(std::move(o.cache_)),
           stream_(o.stream_),
           offload_buffer_(o.offload_buffer_),
-          pitch_sizes_(std::move(o.pitch_sizes_))
+          pitch_sizes_(std::move(o.pitch_sizes_)),
+          pool_(std::move(o.pool_))
     {
         o.ptr_ = nullptr;
         o.offload_buffer_ = nullptr;
+        o.pool_ = nullptr;
     }
 
     ~MemoryArena()
     {
+        FT_LOG_TRACE("~MemoryArena");
         if (ptr_) {
             cudaFree(ptr_);
         }
         if (offload_buffer_) {
-            delete[] offload_buffer_;
+            cudaFreeHost(offload_buffer_);
         }
+        FT_LOG_TRACE("~MemoryArena End");
     }
 
     // Allocate a chunk
@@ -110,6 +118,11 @@ public:
         return pitch_sizes_[width];
     }
 
+    void setStream(cudaStream_t stream)
+    {
+        stream_ = stream;
+    }
+
 private:
     size_t chunk_size_;
     size_t size_;
@@ -119,6 +132,7 @@ private:
     std::shared_ptr<cache_t> cache_;
     cudaStream_t stream_;
     char* offload_buffer_;
+    std::shared_ptr<ctpl::thread_pool> pool_;
     
     std::unordered_map<size_t, size_t> pitch_sizes_;
 };
@@ -134,24 +148,26 @@ public:
         arena_ = std::make_unique<MemoryArena<char>>(size, chunk_size, stream);
     }
 
+    // reinit if not initialized. the stream will always be reset
     void initIfUninit(size_t size, const std::vector<size_t>& tensor_sizes, cudaStream_t stream)
     {
-        if (arena_ != nullptr) {
+        if (arena_ == nullptr) {
             init(size, tensor_sizes, stream);
         }
+        arena_->setStream(stream);
     }
 
     std::future<void> allocate(const tag_t& tag, const std::vector<char*>& dsts, const char* src = nullptr)
     {
         FT_CHECK_WITH_INFO(arena_ != nullptr, "Memory arena uninitialized.");
-        auto post_callback = [](const char* cached_ptr, cudaStream_t stream) {
-            FT_CHECK(dsts.size() == tensor_sizes_.size());
+        FT_CHECK(dsts.size() == tensor_sizes_.size());
+        auto post_callback = [&tensor_sizes = tensor_sizes_, dsts = dsts](const char* cached_ptr, cudaStream_t stream) {
             const char* ptr = cached_ptr;
-            for (int i = 0; i < dsts.size(); ++i)
-                invokeCudaD2DcpyConvert<char, char>(dsts[i], ptr, tensor_sizes_[i], stream_);
-                ptr += tensor_sizes_[i];
+            for (int i = 0; i < dsts.size(); ++i) {
+                invokeCudaD2DcpyConvert<char, char>(dsts[i], ptr, tensor_sizes[i], stream);
+                ptr += tensor_sizes[i];
             }
-        }
+        };
         return arena_->allocate(tag, nullptr, src, post_callback);
     }
 

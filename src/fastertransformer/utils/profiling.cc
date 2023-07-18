@@ -1,5 +1,6 @@
 #include "profiling.h"
 #include "meter.h"
+#include "src/fastertransformer/utils/logger.h"
 
 
 namespace {
@@ -55,8 +56,17 @@ void Profiling::reset()
 
 void Profiling::report() const
 {
+    FT_CHECK(comp_start_events_.size() == comp_end_events_.size());
+    FT_CHECK(mem_start_events_.size() == mem_end_events_.size());
+
     float ms;
     AverageMeter<float> comp_lats, mem_lats;
+
+    std::cout << "Total events num:"
+              << " (comp)" << comp_start_events_.size()
+              << " (mem)" << mem_start_events_.size()
+              << std::endl;
+
     for (int i = 0; i < comp_start_events_.size(); i++) {
         cudaEventElapsedTime(&ms, comp_start_events_[i], comp_end_events_[i]);
         comp_lats.update(ms);

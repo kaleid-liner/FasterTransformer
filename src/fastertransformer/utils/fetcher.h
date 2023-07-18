@@ -8,6 +8,7 @@
 #include "src/fastertransformer/layers/FfnWeight.h"
 #include "src/fastertransformer/utils/allocator.h"
 #include "arena.h"
+#include "src/fastertransformer/utils/config.h"
 
 namespace fastertransformer {
 
@@ -50,23 +51,24 @@ private:
 
     std::vector<void*> big_buffer_on_device;
 
-    bool has_source = false;
     bool buffer_allocated = false;
     IAllocator* allocator;
 
-    std::string layer_name_;
+    std::string next_layer_name_;
+    std::string current_layer_name_;
     std::vector<std::future<void>> futures_;
+
+    const char* next_weight_src_;
+    const char* current_weight_src_;
 
 public:
     cudaStream_t stream;
-    int mode; // 1: FETCH_ON_DEMAND
+    FetchType mode; // 1: FETCH_ON_DEMAND
               // 2: PREFETCH
               // it doesn't affect the functionality, just a signal.
 
-    bool first_time = true; // for prefetch mode
-
-    // the source we use to launch next fetch
-    const char* weight_src;
+    bool first_time;  // first layer should fetch itself and prefetch next layer
+    bool last_time;  //last layer should not prefetch
 
     // working and dst for the next layer use
     int *expert_for_source_row_fetching; // on-GPU buffer
@@ -78,23 +80,25 @@ public:
     WeightT *intermediate_dst;        // on-GPU buffer
     WeightT *output_dst;              // on-GPU buffer
     BiasT *intermediate_bias_dst;   // on-GPU buffer
-    BiasT *intermeidate_scale_dst;
+    BiasT *intermediate_scale_dst;
     BiasT *output_scale_dst;
 
     // 1. copy to expert_for_source_row_fetching
     // 2. calc expert_sparse_idx_working
     // 3. launch fetch on the stream, from source to working
-    void fetch(int *next_expert_for_source_row, size_t num_rows);
+    void fetch(int *next_expert_for_source_row, size_t num_rows, bool prefetch);
 
     // finish previous job
     // drop all previous dst space things and update them.
     void sync(); 
 
     // called in FfnLayer.cc
-    void set_source(const char *w_of_the_layer_to_load, const std::string &layer_name);
+    void set_source(const char* next_weight_src, const char* current_weight_src);
+
+    void set_layer(const std::string& next_layer_name, const std::string& current_layer_name, bool is_first_moe, bool is_last_moe);
 
     FetcherContext(
-        int mode, int num_experts, 
+        FetchType mode, int num_experts, 
         size_t intermediate_w_size_per_expert, size_t output_w_size_per_expert, 
         size_t intermediate_b_size_per_expert,
         size_t intermediate_scale_size_per_expert, size_t output_scale_size_per_expert,

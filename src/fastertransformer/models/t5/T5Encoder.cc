@@ -935,6 +935,8 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
                     ffn_output_tensors.insert(
                         "expert_for_source_row",
                         Tensor{MEMORY_GPU, TYPE_INT32, {h_token_num, moe_k_}, expert_for_source_row_});
+                    // set layer name
+                    ffn_layer_->set_layer("encoder::layer", i, moe_layer_index_);
                 }
                 else {
                     ffn_output_tensors.insert("ffn_output",
@@ -947,14 +949,16 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
             }
 
             if (use_moe) {
-                    FT_LOG_TRACE("=== milestone 24");
+                FT_LOG_TRACE("=== milestone 24");
                 if (layernorm_type_ == LayerNormType::pre_layernorm) {
                     // residual addition for moe, we should pass the unnormed attention output if using pre_layernorm
                     // and pass the normed attention output if using post_layernorm. They all point to the
                     // attn_out_buf_.
                     FT_LOG_TRACE("=== finalize_moe_routing_kernelLauncher");
-                    FT_LOG_TRACE("expert_scales_ %x", expert_scales_);
-                    // printMatrix(expert_scales_, h_token_num, moe_k_, moe_k_, true);
+                    FT_LOG_TRACE("expert_scales_ %p", expert_scales_);
+                    FT_LOG_TRACE("fc2_result_ %p", fc2_result_);
+                    FT_LOG_TRACE("expanded_source_row_to_expanded_dest_row_ %p", expanded_source_row_to_expanded_dest_row_);
+                    FT_LOG_TRACE("expert_for_source_row_ %p", expert_for_source_row_);
                     finalize_moe_routing_kernelLauncher(fc2_result_,        // [moe_k * h_token_num, d_model_], input
                                                         out_tensor,         // [h_token_num, d_model_], output
                                                         attn_out_buf_,      // [h_token_num, d_model_], input

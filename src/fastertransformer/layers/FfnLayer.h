@@ -29,13 +29,18 @@
 #include <stdint.h>
 #include <vector>
 #include "src/fastertransformer/utils/fetcher.h"
+#include "src/fastertransformer/utils/config.h"
 
 namespace fastertransformer {
 
 template<typename T>
 class FfnLayer: public BaseLayer {
 private:
-    std::shared_ptr<FetcherContext<T>> fetcher_context_ = nullptr;
+    // using quant_t = typename std::conditional<std::is_same<T, float>::value, float, typename GlobalConfig::quant_t>::type;
+    using quant_t = typename GlobalConfig::quant_t;
+
+    std::shared_ptr<FetcherContext<T, T>> fetcher_context_ = nullptr;
+    std::shared_ptr<FetcherContext<T, quant_t>> int8_fetcher_context_ = nullptr;
 
     // buffer handling
     size_t max_token_num_ = 0;
@@ -52,13 +57,10 @@ private:
     bool use_gated_activation_;
 
     std::shared_ptr<CutlassMoeFCRunner<T, T>>       moe_fc_runner_;
-    std::shared_ptr<CutlassMoeFCRunner<T, uint8_t>> moe_int8_weight_only_fc_runner_;
+    std::shared_ptr<CutlassMoeFCRunner<T, quant_t>> moe_int8_weight_only_fc_runner_;
 
-    std::shared_ptr<CutlassFpAIntBGemmRunner<T, uint8_t>> weight_only_int8_fc_runner_;
+    std::shared_ptr<CutlassFpAIntBGemmRunner<T, quant_t>> weight_only_int8_fc_runner_;
     std::shared_ptr<CutlassInt8GemmRunner<T>>             int8_fc_runner_;
-
-    std::shared_ptr<CutlassFpAIntBGemmRunner<T, cutlass::uint4b_t>> weight_only_int4_fc_runner_;
-    std::shared_ptr<CutlassMoeFCRunner<T, cutlass::uint4b_t>> moe_int4_weight_only_fc_runner_;
 
     void allocateBuffer() override;
     void freeBuffer() override;
@@ -135,7 +137,8 @@ public:
 
     // called in T5Decoder and TODO: T5Encoder
     virtual void reset_fetcher();
-    virtual void initFetcherContext(int mode, int moe_k, size_t arena_size, std::string prefix);
+    virtual void initFetcherContext(FetchType mode, int moe_k, size_t arena_size);
+    virtual void set_layer(const std::string &layer_name, int layer_index, const std::vector<int64_t>& moe_layer_index);
 
     const FfnWeight<T> *ffn_weights_of_the_next_moe_layer_ = nullptr;   // for prefetch
                                                                         // TODO: need to be assigned in T5Encoder and T5Decoder

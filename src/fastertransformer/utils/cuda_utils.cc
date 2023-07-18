@@ -134,14 +134,16 @@ template void print_to_screen(const __nv_fp8_e4m3* result, const int size);
 #endif
 
 template<typename T>
-void printMatrix(T* ptr, int m, int k, int stride, bool is_device_ptr)
+void printMatrix(const T* ptr, int m, int k, int stride, bool is_device_ptr)
 {
-    T* tmp;
+    const T* tmp;
+    T* _tmp;
     if (is_device_ptr) {
         // k < stride ; stride = col-dimension.
-        tmp = reinterpret_cast<T*>(malloc(m * stride * sizeof(T)));
-        check_cuda_error(cudaMemcpy(tmp, ptr, sizeof(T) * m * stride, cudaMemcpyDeviceToHost));
+        _tmp = reinterpret_cast<T*>(malloc(m * stride * sizeof(T)));
+        check_cuda_error(cudaMemcpy(_tmp, ptr, sizeof(T) * m * stride, cudaMemcpyDeviceToHost));
         cudaDeviceSynchronize();
+        tmp = _tmp;
     }
     else {
         tmp = ptr;
@@ -166,25 +168,28 @@ void printMatrix(T* ptr, int m, int k, int stride, bool is_device_ptr)
         printf("\n");
     }
     if (is_device_ptr) {
-        free(tmp);
+        free(_tmp);
     }
 }
 
-template void printMatrix(float* ptr, int m, int k, int stride, bool is_device_ptr);
-template void printMatrix(half* ptr, int m, int k, int stride, bool is_device_ptr);
+template void printMatrix(const float* ptr, int m, int k, int stride, bool is_device_ptr);
+template void printMatrix(const half* ptr, int m, int k, int stride, bool is_device_ptr);
 #ifdef ENABLE_BF16
-template void printMatrix(__nv_bfloat16* ptr, int m, int k, int stride, bool is_device_ptr);
+template void printMatrix(const __nv_bfloat16* ptr, int m, int k, int stride, bool is_device_ptr);
 #endif
 
-void printMatrix(unsigned long long* ptr, int m, int k, int stride, bool is_device_ptr)
+template<>
+void printMatrix(const unsigned long long* ptr, int m, int k, int stride, bool is_device_ptr)
 {
     typedef unsigned long long T;
-    T*                         tmp;
+    const T* tmp;
+    T* _tmp;
     if (is_device_ptr) {
         // k < stride ; stride = col-dimension.
-        tmp = reinterpret_cast<T*>(malloc(m * stride * sizeof(T)));
-        check_cuda_error(cudaMemcpy(tmp, ptr, sizeof(T) * m * stride, cudaMemcpyDeviceToHost));
+        _tmp = reinterpret_cast<T*>(malloc(m * stride * sizeof(T)));
+        check_cuda_error(cudaMemcpy(_tmp, ptr, sizeof(T) * m * stride, cudaMemcpyDeviceToHost));
         cudaDeviceSynchronize();
+        tmp = _tmp;
     }
     else {
         tmp = ptr;
@@ -209,19 +214,22 @@ void printMatrix(unsigned long long* ptr, int m, int k, int stride, bool is_devi
         printf("\n");
     }
     if (is_device_ptr) {
-        free(tmp);
+        free(_tmp);
     }
 }
 
-void printMatrix(int* ptr, int m, int k, int stride, bool is_device_ptr)
+template<>
+void printMatrix(const int* ptr, int m, int k, int stride, bool is_device_ptr)
 {
     typedef int T;
-    T*          tmp;
+    const T* tmp;
+    T* _tmp;
     if (is_device_ptr) {
         // k < stride ; stride = col-dimension.
-        tmp = reinterpret_cast<T*>(malloc(m * stride * sizeof(T)));
-        check_cuda_error(cudaMemcpy(tmp, ptr, sizeof(T) * m * stride, cudaMemcpyDeviceToHost));
+        _tmp = reinterpret_cast<T*>(malloc(m * stride * sizeof(T)));
+        check_cuda_error(cudaMemcpy(_tmp, ptr, sizeof(T) * m * stride, cudaMemcpyDeviceToHost));
         cudaDeviceSynchronize();
+        tmp = _tmp;
     }
     else {
         tmp = ptr;
@@ -246,19 +254,22 @@ void printMatrix(int* ptr, int m, int k, int stride, bool is_device_ptr)
         printf("\n");
     }
     if (is_device_ptr) {
-        free(tmp);
+        free(_tmp);
     }
 }
 
-void printMatrix(size_t* ptr, int m, int k, int stride, bool is_device_ptr)
+template<>
+void printMatrix(const size_t* ptr, int m, int k, int stride, bool is_device_ptr)
 {
     typedef size_t T;
-    T*             tmp;
+    const T* tmp;
+    T* _tmp;
     if (is_device_ptr) {
         // k < stride ; stride = col-dimension.
-        tmp = reinterpret_cast<T*>(malloc(m * stride * sizeof(T)));
-        check_cuda_error(cudaMemcpy(tmp, ptr, sizeof(T) * m * stride, cudaMemcpyDeviceToHost));
+        _tmp = reinterpret_cast<T*>(malloc(m * stride * sizeof(T)));
+        check_cuda_error(cudaMemcpy(_tmp, ptr, sizeof(T) * m * stride, cudaMemcpyDeviceToHost));
         cudaDeviceSynchronize();
+        tmp = _tmp;
     }
     else {
         tmp = ptr;
@@ -283,7 +294,47 @@ void printMatrix(size_t* ptr, int m, int k, int stride, bool is_device_ptr)
         printf("\n");
     }
     if (is_device_ptr) {
-        free(tmp);
+        free(_tmp);
+    }
+}
+
+template<>
+void printMatrix(const int64_t* ptr, int m, int k, int stride, bool is_device_ptr)
+{
+    typedef int64_t T;
+    const T* tmp;
+    T* _tmp;
+    if (is_device_ptr) {
+        // k < stride ; stride = col-dimension.
+        _tmp = reinterpret_cast<T*>(malloc(m * stride * sizeof(T)));
+        check_cuda_error(cudaMemcpy(_tmp, ptr, sizeof(T) * m * stride, cudaMemcpyDeviceToHost));
+        cudaDeviceSynchronize();
+        tmp = _tmp;
+    }
+    else {
+        tmp = ptr;
+    }
+
+    for (int ii = -1; ii < m; ++ii) {
+        if (ii >= 0) {
+            printf("%02d ", ii);
+        }
+        else {
+            printf("   ");
+        }
+
+        for (int jj = 0; jj < k; jj += 1) {
+            if (ii >= 0) {
+                printf("%4ld ", tmp[ii * stride + jj]);
+            }
+            else {
+                printf("%4d ", jj);
+            }
+        }
+        printf("\n");
+    }
+    if (is_device_ptr) {
+        free(_tmp);
     }
 }
 

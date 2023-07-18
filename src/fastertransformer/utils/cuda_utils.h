@@ -177,11 +177,7 @@ template<typename T>
 void print_to_screen(const T* result, const int size);
 
 template<typename T>
-void printMatrix(T* ptr, int m, int k, int stride, bool is_device_ptr);
-
-void printMatrix(unsigned long long* ptr, int m, int k, int stride, bool is_device_ptr);
-void printMatrix(int* ptr, int m, int k, int stride, bool is_device_ptr);
-void printMatrix(size_t* ptr, int m, int k, int stride, bool is_device_ptr);
+void printMatrix(const T* ptr, int m, int k, int stride, bool is_device_ptr);
 
 template<typename T>
 void check_max_val(const T* result, const int size);

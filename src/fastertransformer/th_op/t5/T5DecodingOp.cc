@@ -84,8 +84,105 @@ FTT5Decoding<T>::FTT5Decoding(int64_t                        head_num,
     int moe_dense_weight_index = 0;  // the moe inter and out kernel has the same index
 
     ft::GlobalConfig::instance().setDefault();
-    const std::string& saved_dir = ft::GlobalConfig::instance().saved_dir;
-    if (saved_dir.empty()) {
+    if (ft::GlobalConfig::instance().load_from_cpp) {
+        const std::string& offload_path = ft::GlobalConfig::instance().offload_path;
+        bool disk_offload = !offload_path.empty();
+        bool use_quant = ft::GlobalConfig::instance().quant_mode == ft::QuantType::WEIGHT_ONLY;
+
+        size_t intermediate_w_size = d_model * inter_size * cutlass::sizeof_bits<typename ft::GlobalConfig::weight_t>::value / 8;
+        size_t output_w_size = inter_size * d_model * cutlass::sizeof_bits<typename ft::GlobalConfig::weight_t>::value / 8;
+        size_t intermediate_scale_size = inter_size * sizeof(ft::GlobalConfig::act_t);
+        size_t output_scale_size = d_model * sizeof(ft::GlobalConfig::act_t);
+        size_t size_per_expert = intermediate_w_size + output_w_size + (use_quant ? (intermediate_scale_size + output_scale_size) : 0);
+
+        auto _load_and_get_ptr_helper = [&](const std::vector<size_t>& shape, const std::string& name) {
+            _weights.push_back(create_tensor_from_bin<T>(shape, offload_path + name));
+            return get_ptr<T>(_weights[_weights.size() - 1]);
+        };
+
+        for (int i = 0; i < layer_num_; ++i) {
+            int local_num_layer = (int)(ceil(layer_num_ * 1.0f / pipeline_para_.world_size_));
+            if (!(i < layer_num_ && (i >= local_num_layer * pipeline_para_.rank_)
+                && (i < local_num_layer * (pipeline_para_.rank_ + 1)))) {
+                continue;
+            }
+
+            auto const  layer_index           = i - local_num_layer * pipeline_para_.rank_;
+            auto* const decoder_layer_weights = decoding_weights.decoder_layer_weights[i];
+            auto const  world_size            = tensor_para_.world_size_;
+            bool use_moe = std::find(moe_layer_index.begin(), moe_layer_index.end(), i) != moe_layer_index.end();
+
+            auto _moe_load_helper = [&]() {
+                if (use_moe) {
+                    if (disk_offload) {
+                        return;
+                    }
+                    else {
+                        // Allocate weight on CPU
+                        std::vector<std::string> expert_filenames;
+                        for (int e = 0; e < expert_num; e++) {
+                            expert_filenames.push_back(offload_path + "decoder::layer" + std::to_string(i) + "expert" + std::to_string(e) + ".bin");
+                        }
+                        _weights.push_back(create_tensor_from_bin<int8_t>({expert_num, size_per_expert}, expert_filenames, false));
+                        decoder_layer_weights->ffn_weights.all_weight = get_ptr<int8_t>(_weights[_weights.size() - 1]);
+                        return;
+                    }
+                }
+                else {
+                    // Allocate weight on GPU
+                    _weights.push_back(create_tensor_from_bin<int8_t>({size_per_expert}, offload_path + "decoder::layer" + std::to_string(i) + ".bin", true));
+                    auto ptr = get_ptr<int8_t>(_weights[_weights.size() - 1]);
+                    if (use_quant) {
+                        decoder_layer_weights->ffn_weights.intermediate_weight.int8_kernel = ptr;
+                        ptr += intermediate_w_size;
+                        decoder_layer_weights->ffn_weights.output_weight.int8_kernel = ptr;
+                        ptr += output_w_size;
+                        decoder_layer_weights->ffn_weights.intermediate_weight.weight_only_quant_scale = reinterpret_cast<const T*>(ptr);
+                        ptr += intermediate_scale_size;
+                        decoder_layer_weights->ffn_weights.output_weight.weight_only_quant_scale = reinterpret_cast<const T*>(ptr);
+                    }
+                    else {
+                        decoder_layer_weights->ffn_weights.intermediate_weight.kernel = reinterpret_cast<const T*>(ptr);
+                        ptr += intermediate_w_size;
+                        decoder_layer_weights->ffn_weights.output_weight.kernel = reinterpret_cast<const T*>(ptr);
+                    }
+                }
+            };
+
+            decoder_layer_weights->pre_layernorm_weights.gamma =
+                _load_and_get_ptr_helper({d_model}, "decoder.block." + std::to_string(i) + ".layer.0.layer_norm.weight.bin");
+            decoder_layer_weights->self_attention_weights.query_weight.kernel =
+                _load_and_get_ptr_helper({d_model, 3 * hidden_dim}, "decoder.block." + std::to_string(i) + ".layer.0.SelfAttention.qkv.weight.0.bin");
+            decoder_layer_weights->self_attention_weights.attention_output_weight.kernel =
+                _load_and_get_ptr_helper({hidden_dim, d_model}, "decoder.block." + std::to_string(i) + ".layer.0.SelfAttention.o.weight.0.bin");
+            decoder_layer_weights->self_attn_layernorm_weights.gamma =
+                _load_and_get_ptr_helper({d_model}, "decoder.block." + std::to_string(i) + ".layer.1.layer_norm.weight.bin");
+            decoder_layer_weights->cross_attention_weights.query_weight.kernel =
+                _load_and_get_ptr_helper({d_model, hidden_dim}, "decoder.block." + std::to_string(i) + ".layer.1.EncDecAttention.q.weight.0.bin");
+            decoder_layer_weights->cross_attention_weights.key_weight.kernel =
+                _load_and_get_ptr_helper({mem_d_model, hidden_dim}, "decoder.block." + std::to_string(i) + ".layer.1.EncDecAttention.k.weight.0.bin");
+            decoder_layer_weights->cross_attention_weights.value_weight.kernel =
+                _load_and_get_ptr_helper({mem_d_model, hidden_dim}, "decoder.block." + std::to_string(i) + ".layer.1.EncDecAttention.v.weight.0.bin");
+            decoder_layer_weights->cross_attention_weights.attention_output_weight.kernel =
+                _load_and_get_ptr_helper({hidden_dim, d_model}, "decoder.block." + std::to_string(i) + ".layer.1.EncDecAttention.o.weight.0.bin");
+            decoder_layer_weights->cross_attn_layernorm_weights.gamma =
+                _load_and_get_ptr_helper({d_model}, "decoder.block." + std::to_string(i) + ".layer.2.layer_norm.weight.bin");
+            _moe_load_helper();
+            if (use_moe) {
+                decoder_layer_weights->ffn_weights.gating_weight.kernel =
+                    _load_and_get_ptr_helper({d_model, expert_num}, "decoder.block." + std::to_string(i) + ".layer.2.mlp.router.classifier.weight.0.bin");
+            }
+        }
+        decoding_weights.post_decoder_layernorm.gamma =
+            _load_and_get_ptr_helper({d_model}, "decoder.final_layer_norm.weight.bin");
+        decoding_weights.pre_decoder_embedding_table =
+            _load_and_get_ptr_helper({d_model, vocab_size}, "shared.weight_T.bin");
+        decoding_weights.post_decoder_embedding.kernel =
+            _load_and_get_ptr_helper({d_model, vocab_size}, "lm_head.weight.bin");
+        decoding_weights.absolute_or_relative_position_embedding =
+            _load_and_get_ptr_helper({head_num, num_bucket}, "decoder.block.0.layer.0.SelfAttention.relative_attention_bias.weight.0.bin");
+    }
+    else {
         for (int i = 0; i < layer_num_; ++i) {
             int local_num_layer = (int)(ceil(layer_num_ * 1.0f / pipeline_para_.world_size_));
             if (!(i < layer_num_ && (i >= local_num_layer * pipeline_para_.rank_)
@@ -212,9 +309,6 @@ FTT5Decoding<T>::FTT5Decoding(int64_t                        head_num,
             decoding_weights.post_decoder_layernorm.beta = get_ptr<T>(_weights[28]);
             decoding_weights.post_decoder_embedding.bias = get_ptr<T>(_weights[29]);
         }
-    } else {
-        std::cout << "Decoder load model from " << saved_dir << std::endl;
-        decoding_weights.loadModel(saved_dir);
     }
 
     int device_id = 0;

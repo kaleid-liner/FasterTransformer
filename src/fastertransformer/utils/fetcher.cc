@@ -9,39 +9,44 @@
 #include "cutlass/numeric_types.h"
 #include "src/fastertransformer/utils/cuda_utils.h"
 #include "src/fastertransformer/utils/profiling.h"
-#include "src/fastertransformer/utils/config.h"
 #include "src/fastertransformer/utils/random.h"
 #include <chrono>
 
 
 namespace fastertransformer {
 
-// namespace {
-// MemoryArena::tag_t getTagForExpert(size_t layer_index, size_t expert_index, size_t expert_num, size_t type, size_t type_num, size_t base)
-// {
-//     return (layer_index * expert_num + expert_index) * type_num + type + base;
-// }
-// } // namespace
-
 // the linker asks me to do so
 
-template class FetcherContext<half, cutlass::fp4_t>;
+template class FetcherContext<float>;
+template class FetcherContext<half>;
 
-template class FetcherContext<float, cutlass:uint4b_t>;
+template class FetcherContext<float, cutlass::fp4_t>;
+template class FetcherContext<float, cutlass::nf4_t>;
+template class FetcherContext<float, cutlass::uint4b_t>;
+template class FetcherContext<float, cutlass::int4b_t>;
+
+template class FetcherContext<half, cutlass::fp4_t>;
+template class FetcherContext<half, cutlass::nf4_t>;
 template class FetcherContext<half, cutlass::uint4b_t>;
+template class FetcherContext<half, cutlass::int4b_t>;
+
 template class FetcherContext<float, uint8_t>;
 template class FetcherContext<half, uint8_t>;
 
 #ifdef ENABLE_BF16
+template class FetcherContext<__nv_bfloat16>;
+
 template class FetcherContext<float, __nv_bfloat16>;
 template class FetcherContext<half, __nv_bfloat16>;
 
 template class FetcherContext<__nv_bfloat16, float>;
 template class FetcherContext<__nv_bfloat16, half>;
-template class FetcherContext<__nv_bfloat16, __nv_bfloat16>;
 
-
+template class FetcherContext<__nv_bfloat16, cutlass::fp4_t>;
+template class FetcherContext<__nv_bfloat16, cutlass::nf4_t>;
 template class FetcherContext<__nv_bfloat16, cutlass::uint4b_t>;
+template class FetcherContext<__nv_bfloat16, cutlass::int4b_t>;
+
 template class FetcherContext<__nv_bfloat16, uint8_t>;
 #endif
 
@@ -55,17 +60,16 @@ int64_t layer_1_fetch_time = 0;
 // 2. calc expert_sparse_idx_working
 // 3. launch fetch on the stream, from source to working
 template<class ActT, class WeightT, class BiasT> 
-void FetcherContext<ActT, WeightT, BiasT>::fetch(int *next_expert_for_source_row, size_t num_rows) {
-    if (this->has_source == false) return;
-    if (this->num_rows != num_rows) {
-        FT_LOG_ERROR("num_rows mismatch: %d vs %d", this->num_rows, num_rows);
-        exit(0);
+void FetcherContext<ActT, WeightT, BiasT>::fetch(int *next_expert_for_source_row, size_t num_rows, bool prefetch) {
+    FT_LOG_DEBUG(__PRETTY_FUNCTION__);
+    if (last_time && prefetch) {
+        FT_LOG_TRACE("Abandon prefetching at final layer");
+        return;
     }
+    FT_CHECK_WITH_INFO(this->num_rows == num_rows, "num_rows mismatch");
+
     FT_LOG_TRACE("fetching");
     // print all src
-    FT_LOG_TRACE("intermediate_w_src: %p", this->intermediate_w_src);
-    FT_LOG_TRACE("output_w_src: %p", this->output_w_src);
-    FT_LOG_TRACE("intermediate_bias_src: %p", this->intermediate_bias_src);
     FT_LOG_TRACE("intermediate_w_size_per_expert: %d", this->intermediate_w_size_per_expert_);
     FT_LOG_TRACE("output_w_size_per_expert: %d", this->output_w_size_per_expert_);
     FT_LOG_TRACE("intermediate_b_size_per_expert: %d", this->intermediate_b_size_per_expert_);
@@ -74,7 +78,6 @@ void FetcherContext<ActT, WeightT, BiasT>::fetch(int *next_expert_for_source_row
     // print next_expert_for_source_row
     // printMatrix(next_expert_for_source_row, 1, this->num_rows, this->num_rows, true);
 
-    this->first_time = false;
     // first copy it to the aligned buffer, and then send it back to the CPU
     check_cuda_error(cudaMemcpyAsync(this->expert_for_source_row_fetching, 
         next_expert_for_source_row, sizeof(int) * this->num_rows, cudaMemcpyDeviceToDevice, this->stream));
@@ -147,34 +150,47 @@ void FetcherContext<ActT, WeightT, BiasT>::fetch(int *next_expert_for_source_row
     #endif
 
 
+    if (GlobalConfig::instance().profiling) {
+        Profiling::instance().insert(stream, EventType::MEM_START);
+    }
+        
     // launch fetch on the stream, from source to working
     for(int i = 0; i < this->active_experts_count; i++) {
         int expert = this->row_expert_sorting_buffer[i];
         expert = stdex::randint(0, (int)num_experts - 1);
-        std::cout << "Expert:" << expert << std::endl;
+        // std::cout << "Expert:" << expert << std::endl;
 
         // copy 4 things
         // 1. intermediate_w
         // 2. output_w
         // 3. intermediate_scale
         // 4. output_scale
-        if (GlobalConfig::instance().profiling) {
-            Profiling::instance().insert(stream, EventType::MEM_START);
-        }
-        
         #ifdef FETCHER_DEBUG
         // sync the cuda stream for debug
         cudaStreamSynchronize(this->stream);
         FT_LOG_DEBUG("sych 1");
         #endif
 
+        const char* fetch_weight_src = prefetch ? next_weight_src_ : current_weight_src_;
+        std::string layer_name = prefetch ? next_layer_name_ : current_layer_name_;
+
         // Use the same tag for output and intermediate
-        futures_.push_back(GroupedMemoryArena::instance().allocate(layer_name_, {
-            reinterpret_cast<char*>(intermediate_working) + i * intermediate_w_size_per_expert_,
-            reinterpret_cast<char*>(output_working) + i * output_w_size_per_expert_,
-            reinterpret_cast<char*>(intermediate_scale_working) + i * intermediate_scale_size_per_expert_,
-            reinterpret_cast<char*>(output_scale_working) + i * output_scale_size_per_expert_
-        }, weight_src + expert * weight_size_per_expert_));
+        if (intermediate_scale_size_per_expert_ != 0) {
+            futures_.push_back(GroupedMemoryArena::instance().allocate(
+                layer_name + "expert" + std::to_string(expert), {
+                    reinterpret_cast<char*>(intermediate_working) + i * intermediate_w_size_per_expert_,
+                    reinterpret_cast<char*>(output_working) + i * output_w_size_per_expert_,
+                    reinterpret_cast<char*>(intermediate_scale_working) + i * intermediate_scale_size_per_expert_,
+                    reinterpret_cast<char*>(output_scale_working) + i * output_scale_size_per_expert_},
+                fetch_weight_src + expert * weight_size_per_expert_));
+        }
+        else {
+            futures_.push_back(GroupedMemoryArena::instance().allocate(
+                layer_name + "expert" + std::to_string(expert), {
+                    reinterpret_cast<char*>(intermediate_working) + i * intermediate_w_size_per_expert_,
+                    reinterpret_cast<char*>(output_working) + i * output_w_size_per_expert_},
+                fetch_weight_src + expert * weight_size_per_expert_));
+        }
         
         #ifdef FETCHER_DEBUG
         // sync the cuda stream for debug
@@ -192,8 +208,12 @@ int64_t fetcher_sync_wait_time = 0; // microseconds
 
 template<class ActT, class WeightT, class BiasT> 
 void FetcherContext<ActT, WeightT, BiasT>::sync() {
-    // sync the steam
-    FT_LOG_TRACE("sync stream\n");
+    FT_LOG_DEBUG(__PRETTY_FUNCTION__);
+    // if (last_time && mode == FetchType::PREFETCH) {
+    //     FT_LOG_TRACE("Abandon syncing at final layer");
+    //     FT_CHECK(futures_.size() )
+    //     return;
+    // }
     // get the millisec
     for (auto& future : futures_) {
         future.wait();
@@ -215,30 +235,39 @@ void FetcherContext<ActT, WeightT, BiasT>::sync() {
 // called in FfnLayer.cc
 // 
 template<class ActT, class WeightT, class BiasT> 
-void FetcherContext<ActT, WeightT, BiasT>::set_source(const char *w_of_the_layer_to_load, const std::string &layer_name) {
-    if (w_of_the_layer_to_load == nullptr) {
-        this->weight_src = nullptr;
-        this->has_source = false;
-        return;
-    }
-    this->has_source = true;
-    this->layer_name_ = layer_name;
+void FetcherContext<ActT, WeightT, BiasT>::set_source(const char* next_weight_src, const char* current_weight_src) {
+    next_weight_src_ = next_weight_src;
+    current_weight_src_ = current_weight_src;
+}
+
+template<class ActT, class WeightT, class BiasT> 
+void FetcherContext<ActT, WeightT, BiasT>::set_layer(
+        const std::string& next_layer_name,
+        const std::string& current_layer_name,
+        bool is_first_moe,
+        bool is_last_moe)
+{
+    next_layer_name_ = next_layer_name;
+    current_layer_name_ = current_layer_name;
+    first_time = is_first_moe;
+    last_time = is_last_moe;
 }
 
 int64_t expert_for_row_backup_time = 0; // microseconds
 
 template<class ActT, class WeightT, class BiasT> 
 FetcherContext<ActT, WeightT, BiasT>::~FetcherContext() {
-    this->freeBuffer();
-    //destroy the stream
+    FT_LOG_DEBUG(__PRETTY_FUNCTION__);
+    FT_LOG_TRACE("futures left: %d", futures_.size());
+    freeBuffer();
     Profiling::instance().report();
     Profiling::instance().reset();
-    check_cuda_error(cudaStreamDestroy(this->stream));
+    check_cuda_error(cudaStreamDestroy(stream));
 }
 
 template<class ActT, class WeightT, class BiasT> 
 FetcherContext<ActT, WeightT, BiasT>::FetcherContext(
-    int mode, int num_experts, 
+    FetchType mode, int num_experts, 
     size_t intermediate_w_size_per_expert, size_t output_w_size_per_expert,
     size_t intermediate_b_size_per_expert,
     size_t intermediate_scale_size_per_expert, size_t output_scale_size_per_expert,
@@ -246,22 +275,27 @@ FetcherContext<ActT, WeightT, BiasT>::FetcherContext(
     :   mode(mode),
         first_time(true),
         num_experts(num_experts),
-        intermediate_w_size_per_expert_(get_real_size<WeightT>(intermediate_w_size_per_expert)),
-        output_w_size_per_expert_(get_real_size<WeightT>(output_w_size_per_expert)),
-        intermediate_b_size_per_expert_(get_real_size<BiasT>(intermediate_b_size_per_expert)),
-        intermeiate_scale_size_per_expert_(get_real_size<BiasT>(intermediate_scale_size_per_expert)),
-        output_scale_size_per_expert_(get_real_size<BiasT>(output_scale_size_per_expert)) {
+        intermediate_w_size_per_expert_(cutlass::get_real_size<WeightT>(intermediate_w_size_per_expert)),
+        output_w_size_per_expert_(cutlass::get_real_size<WeightT>(output_w_size_per_expert)),
+        intermediate_b_size_per_expert_(cutlass::get_real_size<BiasT>(intermediate_b_size_per_expert)),
+        intermediate_scale_size_per_expert_(cutlass::get_real_size<BiasT>(intermediate_scale_size_per_expert)),
+        output_scale_size_per_expert_(cutlass::get_real_size<BiasT>(output_scale_size_per_expert)) {
     
     // create cuda stream
     check_cuda_error(cudaStreamCreate(&this->stream));
-    // TODO: set the size elsewhere (after refactoring with DI)
-    FT_LOG_ERROR("%d", stream);
     weight_size_per_expert_ = intermediate_w_size_per_expert_ + output_w_size_per_expert_ + intermediate_scale_size_per_expert_ + output_scale_size_per_expert_;
-    GroupedMemoryArena::instance().initIfUninit(arena_size, {
-        intermediate_w_size_per_expert_,
-        output_w_size_per_expert_,
-        intermediate_scale_size_per_expert_,
-        output_scale_size_per_expert_}, stream);
+    if (intermediate_scale_size_per_expert_ != 0) {
+        GroupedMemoryArena::instance().initIfUninit(arena_size, {
+            intermediate_w_size_per_expert_,
+            output_w_size_per_expert_,
+            intermediate_scale_size_per_expert_,
+            output_scale_size_per_expert_}, stream);
+    }
+    else {
+        GroupedMemoryArena::instance().initIfUninit(arena_size, {
+            intermediate_w_size_per_expert_,
+            output_w_size_per_expert_}, stream);
+    }
     Profiling::instance().reset();
 }
 
@@ -301,38 +335,39 @@ void FetcherContext<ActT, WeightT, BiasT>::allocateBuffer(IAllocator* allocator,
 
 template<class ActT, class WeightT, class BiasT> 
 void FetcherContext<ActT, WeightT, BiasT>::freeBuffer() {
-    FT_LOG_DEBUG("fetcher context free buffer");
+    FT_LOG_DEBUG(__PRETTY_FUNCTION__);
     // free all buffer
     // print all buffers to be freed
-    FT_LOG_DEBUG("free expert_for_source_row_fetching: %p", this->expert_for_source_row_fetching);
-    FT_LOG_DEBUG("free expert_sparse_idx: %p", this->expert_sparse_idx);
-    FT_LOG_DEBUG("free expert_sparse_idx_working: %p", this->expert_sparse_idx_working);
-    FT_LOG_DEBUG("free output_dst: %p", this->output_dst);
-    FT_LOG_DEBUG("free intermediate_dst: %p", this->intermediate_dst);
-    FT_LOG_DEBUG("free intermediate_bias_dst: %p", this->intermediate_bias_dst);
-    FT_LOG_DEBUG("free output_working: %p", this->output_working);
-    FT_LOG_DEBUG("free intermediate_working: %p", this->intermediate_working);
-    FT_LOG_DEBUG("free intermediate_bias_working: %p", this->intermediate_bias_working);
-    FT_LOG_DEBUG("free row_expert_sorting_buffer: %p", this->row_expert_sorting_buffer);
-    FT_LOG_DEBUG("free expert_sparse_idx_cpu: %p", this->expert_sparse_idx_cpu);
+    FT_LOG_TRACE("free expert_for_source_row_fetching: %p", this->expert_for_source_row_fetching);
+    FT_LOG_TRACE("free expert_sparse_idx: %p", this->expert_sparse_idx);
+    FT_LOG_TRACE("free expert_sparse_idx_working: %p", this->expert_sparse_idx_working);
+    FT_LOG_TRACE("free output_dst: %p", this->output_dst);
+    FT_LOG_TRACE("free intermediate_dst: %p", this->intermediate_dst);
+    FT_LOG_TRACE("free intermediate_bias_dst: %p", this->intermediate_bias_dst);
+    FT_LOG_TRACE("free output_working: %p", this->output_working);
+    FT_LOG_TRACE("free intermediate_working: %p", this->intermediate_working);
+    FT_LOG_TRACE("free intermediate_bias_working: %p", this->intermediate_bias_working);
+    FT_LOG_TRACE("free row_expert_sorting_buffer: %p", this->row_expert_sorting_buffer);
+    FT_LOG_TRACE("free expert_sparse_idx_cpu: %p", this->expert_sparse_idx_cpu);
 
 
     // free all big buffer, ignore small buffers
     for (auto ptr : this->big_buffer_on_device) {
         check_cuda_error(cudaFree(ptr));
     }
-    FT_LOG_DEBUG("fetcher context free buffer finished");
-    FT_LOG_ERROR("fetcher_sync_wait_time %lld us", fetcher_sync_wait_time);
-    FT_LOG_ERROR("calc_sparse_time %lld us", calc_sparse_time);
-    FT_LOG_ERROR("expert_for_row_backup_time %lld us", expert_for_row_backup_time);
-    FT_LOG_ERROR("expert_for_row_time %lld us", cpy_expert_array_to_cpu_time);
-    FT_LOG_ERROR("total_row_cpy %lld", total_row_cpy);
-    FT_LOG_ERROR("layer_1_fetch_time %lld us", layer_1_fetch_time);
+    FT_LOG_TRACE("fetcher context free buffer finished");
+    FT_LOG_INFO("fetcher_sync_wait_time %lld us", fetcher_sync_wait_time);
+    FT_LOG_INFO("calc_sparse_time %lld us", calc_sparse_time);
+    FT_LOG_INFO("expert_for_row_backup_time %lld us", expert_for_row_backup_time);
+    FT_LOG_INFO("expert_for_row_time %lld us", cpy_expert_array_to_cpu_time);
+    FT_LOG_INFO("total_row_cpy %lld", total_row_cpy);
+    FT_LOG_INFO("layer_1_fetch_time %lld us", layer_1_fetch_time);
 }
 
 // TODO: refactor
 template<class ActT, class WeightT, class BiasT> 
 void* FetcherContext<ActT, WeightT, BiasT>::mallocOnDeviceAligned(size_t size) {
+    if (size == 0) return nullptr;
     size_t alignment = 128;
     void* ptr;
     check_cuda_error(cudaMalloc(&ptr, size + alignment));

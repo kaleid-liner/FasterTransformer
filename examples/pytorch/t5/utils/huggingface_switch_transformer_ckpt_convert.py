@@ -66,6 +66,33 @@ def fuse_decoder_qkv(model, factor, saved_dir, np_weight_data_type):
         for j in range(factor):
             saved_path = saved_dir / f"decoder.block.{i}.layer.0.SelfAttention.qkv.weight.{j}.bin"
             split_vals[j].tofile(saved_path.as_posix())
+        
+
+def fuse_expert(model, factor, saved_dir, np_weight_data_type):
+    model_dict = {}
+    for name, param in model.named_parameters():
+        if name.find("mlp") != -1:
+            model_dict[name] = param
+
+    for name, param in model.named_parameters():
+        if name.find("mlp") != -1 and name.find("wi") != -1:
+            wo_name = name.replace("wi", "wo")
+            all_weight = torch.cat([torch.flatten(param),
+                                    torch.flatten(model_dict[wo_name])])
+            all_weight = all_weight.cpu().detach().numpy().astype(np_weight_data_type)
+
+            split_vals = np.split(all_weight, factor, axis=-1)
+
+            m = re.match(r"(\w+)\.block\.(\d+)\.layer\.\d+\.mlp(?:\.experts\.expert_(\d+))?\.wi", name)
+
+            if m[3]:
+                new_name = f"{m[1]}::layer{m[2]}expert{m[3]}.bin"
+            else:
+                new_name = f"{m[1]}::layer{m[2]}.bin"
+
+            for j in range(factor):
+                saved_path = saved_dir / new_name
+                split_vals[j].tofile(saved_path.as_posix())
 
 
 def split_and_convert_process(key, val, factor, saved_dir):
@@ -207,6 +234,8 @@ def convert_checkpoint(args):
 
     if not args.encoder_only:
         fuse_decoder_qkv(model, i_gpu_num, saved_dir, np_weight_data_type)
+
+    fuse_expert(model, i_gpu_num, saved_dir, np_weight_data_type)
 
 
 if __name__ == "__main__":

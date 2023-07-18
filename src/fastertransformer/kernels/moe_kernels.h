@@ -132,7 +132,7 @@ public:
     size_t getWorkspaceSize(
         const int num_rows, const int hidden_size, const int inter_size, const int num_experts, const int k);
 
-    void setFetcherContext(FetcherContext<WeightType, T> *fetcher_ctx);
+    void setFetcherContext(FetcherContext<T, WeightType> *fetcher_ctx);
 
     void run_moe_fc(const T*          input_activations,
                     const T*          gating_output,
@@ -206,7 +206,7 @@ private:
     T* fc1_result_; // k * num_rows * inter_size
 
     int *expert_for_source_row_backup_; // for moe prefetching
-    FetcherContext<WeightType, T> *fetcher_context = nullptr;
+    FetcherContext<T, WeightType> *fetcher_context = nullptr;
 };
 
 template<typename WeightType>
@@ -220,13 +220,18 @@ public:
         return 0;
     }
 
+    void setFetcherContext(FetcherContext<float, WeightType> *fetcher_ctx)
+    {
+        return;
+    }
+
     void run_moe_fc(const float*   input_activations,
                     const float*   gating_output,
-                    const uint8_t* fc1_expert_weights,
+                    const WeightType* fc1_expert_weights,
                     const float*   fc1_scales,
                     const float*   fc1_expert_biases,
                     ActivationType fc1_activation_type,
-                    const uint8_t* fc2_expert_weights,
+                    const WeightType* fc2_expert_weights,
                     const float*   fc2_scales,
                     const int      num_rows,
                     const int      hidden_size,
@@ -245,11 +250,11 @@ public:
 
     void run_moe_fc(const float*   input_activations,
                     const float*   gating_output,
-                    const uint8_t* fc1_expert_weights,
+                    const WeightType* fc1_expert_weights,
                     const float*   fc1_scales,
                     const float*   fc1_expert_biases,
                     ActivationType fc1_activation_type,
-                    const uint8_t* fc2_expert_weights,
+                    const WeightType* fc2_expert_weights,
                     const float*   fc2_scales,
                     const int      num_rows,
                     const int      hidden_size,

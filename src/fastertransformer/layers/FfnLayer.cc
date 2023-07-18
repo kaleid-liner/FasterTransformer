@@ -17,15 +17,12 @@
 #include "src/fastertransformer/layers/FfnLayer.h"
 #include "src/fastertransformer/kernels/transpose_int8_kernels.h"
 #include "src/fastertransformer/utils/nvtx_utils.h"
-#include "src/fastertransformer/utils/config.h"
 
 namespace fastertransformer {
 
 
 template<typename T>
 void FfnLayer<T>::reset_fetcher() {
-    if (fetcher_context_.get() != nullptr)
-        fetcher_context_->first_time = true;
 }
 
 template<typename T>
@@ -36,6 +33,14 @@ void FfnLayer<T>::forward(std::vector<fastertransformer::Tensor>*       output_t
     TensorMap input_tensor({{"ffn_input", input_tensors->at(0)}});
     TensorMap output_tensor({{"ffn_output", output_tensors->at(0)}});
     forward(&output_tensor, &input_tensor, ffn_weights);
+}
+
+template<typename T>
+const char* get_weight_src(const FfnWeight<T>* ffn_weights)
+{
+    FT_LOG_TRACE("ffn_weights: %p", ffn_weights);
+    if (ffn_weights == nullptr) return nullptr;
+    return reinterpret_cast<const char*>(ffn_weights->all_weight);
 }
 
 template<typename T>
@@ -97,6 +102,8 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
 
     const int* ia3_tasks = input_tensors->getPtr<const int>("ia3_tasks", nullptr);
 
+    sync_check_cuda_error();
+
     if (use_moe) {
         PUSH_RANGE("FFN moe");
         FT_CHECK(ia3_tasks == nullptr);
@@ -113,21 +120,22 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
                               hidden_units_,                        // ldb
                               moe_gates_buf_,                       // C[m, expert_num]
                               expert_num_);                         // ldc
-        
+
+        sync_check_cuda_error();
+
         FT_LOG_TRACE("=== milestones 101 === %d", int8_mode_);
         FT_LOG_TRACE("=== milestones 101.5");
-        if (this->fetcher_context_.get() != nullptr) {
-            this->fetcher_context_->allocateBuffer(this->allocator_, m);
-            if (this->fetcher_context_->mode == PREFETCH)
-                this->fetcher_context_->set_source(this->ffn_weights_of_the_next_moe_layer_);
-            else if (this->fetcher_context_->mode == FETCH_ON_DEMAND) {
-                this->fetcher_context_->set_source(ffn_weights);
-            }
-            FT_LOG_TRACE("=== milestones 101.6");
-            moe_fc_runner_->setFetcherContext(this->fetcher_context_.get());
-        }
 
         if (int8_mode_ == 0) {
+            if (fetcher_context_.get() != nullptr) {
+                fetcher_context_->allocateBuffer(allocator_, m);
+                fetcher_context_->set_source(
+                    get_weight_src(ffn_weights_of_the_next_moe_layer_),
+                    get_weight_src(ffn_weights));
+                FT_LOG_TRACE("=== milestones 101.6");
+                moe_fc_runner_->setFetcherContext(fetcher_context_.get());
+            }
+
             FT_LOG_TRACE("=== milestones 101.7");
             moe_fc_runner_->run_moe_fc(input_tensor,
                                        moe_gates_buf_,
@@ -151,6 +159,15 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
             FT_LOG_TRACE("=== milestones 102");
         }
         else if (int8_mode_ == 1) {
+            if (int8_fetcher_context_.get() != nullptr) {
+                int8_fetcher_context_->allocateBuffer(allocator_, m);
+                int8_fetcher_context_->set_source(
+                    get_weight_src(ffn_weights_of_the_next_moe_layer_),
+                    get_weight_src(ffn_weights));
+                FT_LOG_TRACE("=== milestones 101.6");
+                moe_int8_weight_only_fc_runner_->setFetcherContext(int8_fetcher_context_.get());
+            }
+
             FT_LOG_TRACE("=== milestones 101.8");
             FT_CHECK_WITH_INFO(moe_int8_weight_only_fc_runner_.get() != NULL,
                                "weight only runner was not initialized.");
@@ -164,43 +181,11 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
             moe_int8_weight_only_fc_runner_->run_moe_fc(
                 input_tensor,
                 moe_gates_buf_,
-                reinterpret_cast<const uint8_t*>(ffn_weights->intermediate_weight.int8_kernel),
+                reinterpret_cast<const quant_t*>(ffn_weights->intermediate_weight.int8_kernel),
                 ffn_weights->intermediate_weight.weight_only_quant_scale,
                 ffn_weights->intermediate_weight.bias,
                 activation_type,
-                reinterpret_cast<const uint8_t*>(ffn_weights->output_weight.int8_kernel),
-                ffn_weights->output_weight.weight_only_quant_scale,
-                m,
-                hidden_units_,
-                inter_size_,
-                expert_num_,
-                moe_k,
-                moe_fc_workspace_,
-                output_tensor,
-                expert_scales,
-                permuted_rows,
-                permuted_experts,
-                stream_);
-        }
-        else if (int8_mode_ == 3) {
-            FT_LOG_TRACE("=== milestones 101.9");
-            FT_CHECK_WITH_INFO(moe_int4_weight_only_fc_runner_.get() != NULL,
-                               "weight only runner was not initialized.");
-
-            FT_CHECK(ffn_weights->intermediate_weight.int8_kernel != NULL
-                     && ffn_weights->intermediate_weight.weight_only_quant_scale != NULL);
-
-            FT_CHECK(ffn_weights->output_weight.int8_kernel != NULL
-                     && ffn_weights->output_weight.weight_only_quant_scale != NULL);
-
-            moe_int4_weight_only_fc_runner_->run_moe_fc(
-                input_tensor,
-                moe_gates_buf_,
-                reinterpret_cast<const cutlass::uint4b_t*>(ffn_weights->intermediate_weight.int8_kernel),
-                ffn_weights->intermediate_weight.weight_only_quant_scale,
-                ffn_weights->intermediate_weight.bias,
-                activation_type,
-                reinterpret_cast<const cutlass::uint4b_t*>(ffn_weights->output_weight.int8_kernel),
+                reinterpret_cast<const quant_t*>(ffn_weights->output_weight.int8_kernel),
                 ffn_weights->output_weight.weight_only_quant_scale,
                 m,
                 hidden_units_,
@@ -264,7 +249,7 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
                 // launch fused GEMM + activation
                 weight_only_int8_fc_runner_->gemm_bias_act(
                     input_tensor,
-                    reinterpret_cast<const uint8_t*>(ffn_weights->intermediate_weight.int8_kernel),
+                    reinterpret_cast<const quant_t*>(ffn_weights->intermediate_weight.int8_kernel),
                     ffn_weights->intermediate_weight.weight_only_quant_scale,
                     ffn_weights->intermediate_weight.bias,
                     inter_buf_,
@@ -281,7 +266,7 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
                 // Otherwise, let FT handle activation
                 weight_only_int8_fc_runner_->gemm(
                     input_tensor,
-                    reinterpret_cast<const uint8_t*>(ffn_weights->intermediate_weight.int8_kernel),
+                    reinterpret_cast<const quant_t*>(ffn_weights->intermediate_weight.int8_kernel),
                     ffn_weights->intermediate_weight.weight_only_quant_scale,
                     inter_buf_,
                     m,
@@ -297,7 +282,7 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
 
                     weight_only_int8_fc_runner_->gemm(
                         input_tensor,
-                        reinterpret_cast<const uint8_t*>(ffn_weights->intermediate_weight2.int8_kernel),
+                        reinterpret_cast<const quant_t*>(ffn_weights->intermediate_weight2.int8_kernel),
                         ffn_weights->intermediate_weight2.weight_only_quant_scale,
                         inter_buf_2_,
                         m,
@@ -321,60 +306,6 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
                                       reinterpret_cast<int8_t*>(inter_buf_),
                                       inter_size_,
                                       ffn_weights->intermediate_weight.scale_inter);
-        }
-        else if (int8_mode_ == 3) {
-            FT_LOG_TRACE("=== milestones 105.3");
-            FT_CHECK_WITH_INFO(weight_only_int4_fc_runner_.get() != NULL, "weight only runner was not initialized.");
-            FT_CHECK(ffn_weights->intermediate_weight.int8_kernel != NULL
-                     && ffn_weights->intermediate_weight.weight_only_quant_scale != NULL);
-
-            if (ia3_tasks == nullptr && !use_gated_activation) {
-                // launch fused GEMM + activation
-                weight_only_int4_fc_runner_->gemm_bias_act(
-                    input_tensor,
-                    reinterpret_cast<const cutlass::uint4b_t*>(ffn_weights->intermediate_weight.int8_kernel),
-                    ffn_weights->intermediate_weight.weight_only_quant_scale,
-                    ffn_weights->intermediate_weight.bias,
-                    inter_buf_,
-                    m,
-                    inter_size_,
-                    hidden_units_,
-                    activation_type,
-                    mixed_gemm_workspace_,
-                    mixed_gemm_ws_bytes_,
-                    stream_);
-            }
-            else {
-                FT_LOG_TRACE("=== milestones 106");
-                // Otherwise, let FT handle activation
-                weight_only_int4_fc_runner_->gemm(
-                    input_tensor,
-                    reinterpret_cast<const cutlass::uint4b_t*>(ffn_weights->intermediate_weight.int8_kernel),
-                    ffn_weights->intermediate_weight.weight_only_quant_scale,
-                    inter_buf_,
-                    m,
-                    inter_size_,
-                    hidden_units_,
-                    mixed_gemm_workspace_,
-                    mixed_gemm_ws_bytes_,
-                    stream_);
-
-                if (use_gated_activation) {
-                    FT_CHECK(ffn_weights->intermediate_weight2.int8_kernel != NULL
-                             && ffn_weights->intermediate_weight2.weight_only_quant_scale != NULL);
-
-                    weight_only_int4_fc_runner_->gemm(
-                        input_tensor,
-                        reinterpret_cast<const cutlass::uint4b_t*>(ffn_weights->intermediate_weight2.int8_kernel),
-                        ffn_weights->intermediate_weight2.weight_only_quant_scale,
-                        inter_buf_2_,
-                        m,
-                        inter_size_,
-                        hidden_units_,
-                        mixed_gemm_workspace_,
-                        mixed_gemm_ws_bytes_,
-                        stream_);
-                }
         }
         else {
             FT_LOG_TRACE("=== milestones 107");
@@ -450,7 +381,7 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
             FT_CHECK(ffn_weights->output_weight.int8_kernel != NULL
                      && ffn_weights->output_weight.weight_only_quant_scale != NULL);
             weight_only_int8_fc_runner_->gemm(inter_buf_,
-                                              reinterpret_cast<const uint8_t*>(ffn_weights->output_weight.int8_kernel),
+                                              reinterpret_cast<const quant_t*>(ffn_weights->output_weight.int8_kernel),
                                               ffn_weights->output_weight.weight_only_quant_scale,
                                               output_tensor,
                                               m,
@@ -474,22 +405,6 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
                                   nullptr,
                                   0,
                                   stream_);
-        }
-        else if (int8_mode_ == 3) {
-            FT_LOG_TRACE("=== milestones 109.1");
-            FT_CHECK_WITH_INFO(weight_only_int4_fc_runner_.get() != NULL, "weight only runner was not initialized.");
-            FT_CHECK(ffn_weights->output_weight.int8_kernel != NULL
-                     && ffn_weights->output_weight.weight_only_quant_scale != NULL);
-            weight_only_int4_fc_runner_->gemm(inter_buf_,
-                                              reinterpret_cast<const cutlass::uint4b_t*>(ffn_weights->output_weight.int8_kernel),
-                                              ffn_weights->output_weight.weight_only_quant_scale,
-                                              output_tensor,
-                                              m,
-                                              hidden_units_,
-                                              inter_size_,
-                                              mixed_gemm_workspace_,
-                                              mixed_gemm_ws_bytes_,
-                                              stream_);
         }
         else {
             FT_LOG_TRACE("=== milestones 111");
@@ -547,13 +462,8 @@ FfnLayer<T>::FfnLayer(size_t           max_batch_size,
     }
     else if (int8_mode_ == 1) {
         FT_CHECK_WITH_INFO(!(std::is_same<T, float>::value), "Weight only quant not supported for fp32.");
-        moe_int8_weight_only_fc_runner_ = std::make_shared<CutlassMoeFCRunner<T, uint8_t>>();
-        weight_only_int8_fc_runner_     = std::make_shared<CutlassFpAIntBGemmRunner<T, uint8_t>>();
-    }
-    else if (int8_mode_ == 3) {  // 4bit weight only quant
-        FT_CHECK_WITH_INFO(!(std::is_same<T, float>::value), "Weight only quant not supported for fp32.");
-        moe_int4_weight_only_fc_runner_ = std::make_shared<CutlassMoeFCRunner<T, cutlass::uint4b_t>>();
-        weight_only_int4_fc_runner_     = std::make_shared<CutlassFpAIntBGemmRunner<T, cutlass::uint4b_t>>();
+        moe_int8_weight_only_fc_runner_ = std::make_shared<CutlassMoeFCRunner<T, quant_t>>();
+        weight_only_int8_fc_runner_     = std::make_shared<CutlassFpAIntBGemmRunner<T, quant_t>>();
     }
 }
 
@@ -598,20 +508,60 @@ void FfnLayer<T>::allocateBuffer()
 }
 
 template<typename T>
-void FfnLayer<T>::initFetcherContext(int mode, int moe_k, size_t arena_size, std::string prefix) {
-    if (mode != 0) {
+void FfnLayer<T>::initFetcherContext(FetchType mode, int moe_k, size_t arena_size) {
+    if (mode != FetchType::GPU_ONLY) {
         FT_LOG_DEBUG(" === create fetcher context for moe MODE %d", mode);
-        this->fetcher_context_ = std::make_shared<FetcherContext<T>>(
-            mode, 
-            expert_num_,
-            hidden_units_ * inter_size_,
-            inter_size_ * hidden_units_,
-            inter_size_,
-            inter_size_,
-            arena_size,
-            prefix);
+        if (int8_mode_ == 0) {
+            fetcher_context_ = std::make_shared<FetcherContext<T>>(
+                mode, 
+                expert_num_,
+                hidden_units_ * inter_size_,
+                inter_size_ * hidden_units_,
+                inter_size_,
+                0,
+                0,
+                arena_size);
+        } else {
+            int8_fetcher_context_ = std::make_shared<FetcherContext<T, quant_t>>(
+                mode, 
+                expert_num_,
+                hidden_units_ * inter_size_,
+                inter_size_ * hidden_units_,
+                inter_size_,
+                inter_size_,
+                hidden_units_,
+                arena_size);
+        }
     } else {
-        this->fetcher_context_.reset();
+        fetcher_context_.reset();
+        int8_fetcher_context_.reset();
+    }
+}
+
+template<typename T>
+void FfnLayer<T>::set_layer(const std::string &layer_name, int layer_index, const std::vector<int64_t>& moe_layer_index) {
+    bool is_first_moe = (layer_index == moe_layer_index[0]);
+    bool is_last_moe = (layer_index == moe_layer_index[moe_layer_index.size() - 1]);
+    auto next_layer_it = std::upper_bound(moe_layer_index.begin(), moe_layer_index.end(), layer_index);
+    int next_layer_index;
+    if (next_layer_it != moe_layer_index.end()) {
+        next_layer_index = *next_layer_it;
+    } else {
+        next_layer_index = layer_index;
+    }
+
+    if (int8_mode_ == 0) {
+        fetcher_context_->set_layer(
+            layer_name + std::to_string(next_layer_index),
+            layer_name + std::to_string(layer_index),
+            is_first_moe,
+            is_last_moe);
+    } else {
+        int8_fetcher_context_->set_layer(
+            layer_name + std::to_string(next_layer_index),
+            layer_name + std::to_string(layer_index),
+            is_first_moe,
+            is_last_moe);
     }
 }
 
@@ -631,12 +581,6 @@ void FfnLayer<T>::allocateBuffer(size_t token_num, int moe_k, bool use_moe)
             FT_CHECK_WITH_INFO(moe_int8_weight_only_fc_runner_.get() != NULL,
                                "weight only moe runner was not initialized.");
             ws_size_moe = moe_int8_weight_only_fc_runner_->getWorkspaceSize(
-                token_num, hidden_units_, inter_size_, expert_num_, moe_k);
-        }
-        else if (int8_mode_ == 3) {
-            FT_CHECK_WITH_INFO(moe_int4_weight_only_fc_runner_.get() != NULL,
-                               "weight only moe runner was not initialized.");
-            ws_size_moe = moe_int4_weight_only_fc_runner_->getWorkspaceSize(
                 token_num, hidden_units_, inter_size_, expert_num_, moe_k);
         }
 

@@ -69,4 +69,10 @@ fastertransformer::Tensor convert_tensor(torch::Tensor tensor, fastertransformer
 
 size_t sizeBytes(torch::Tensor tensor);
 
+template<typename T>
+torch::Tensor create_tensor_from_bin(const std::vector<size_t>& shape, const std::string& filename, bool gpu = true);
+
+template<typename T>
+torch::Tensor create_tensor_from_bin(const std::vector<size_t>& shape, const std::vector<std::string>& filenames, bool gpu = true);
+
 }  // namespace torch_ext

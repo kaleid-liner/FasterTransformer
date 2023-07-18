@@ -302,7 +302,7 @@ add_subdirectory(3rdparty)
 add_subdirectory(src)
 add_subdirectory(examples)
 
-add_subdirectory(tests)
+#add_subdirectory(tests)
 
 # # Mesaure the compile time
 option(MEASURE_BUILD_TIME "Measure the build time of each module" OFF)

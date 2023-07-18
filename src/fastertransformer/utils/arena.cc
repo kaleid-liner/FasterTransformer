@@ -16,22 +16,25 @@ std::future<void> MemoryArena<T>::allocate(const tag_t& tag, T* dst, const T* sr
                                            std::function<void(const T*, cudaStream_t)> post_callback)
 {
     auto repl = cache_->PutKey(tag, nullptr);
-    auto future = std::async(std::launch::async, [=, this]() {
+    if (GlobalConfig::instance().profiling) {
+        Profiling::instance().cacheHit(repl.second);
+    }
+    auto future = pool_->push([=](int) {
         if (repl.first != nullptr && !repl.second && src != nullptr) {
-            // FT_LOG_ERROR("Cache miss");
-            // FT_LOG_ERROR("%p %p %p %d", repl.first, src, ptr_, stream_);
-            if (GlobalConfig::instance().disk_offload) {
-                std::ifstream ifs(GlobalConfig::instance().offload_path + tag, std::ifstream::binary);
+            FT_LOG_INFO(tag);
+            const T* cpy_src = src;
+            if (!GlobalConfig::instance().offload_path.empty()) {
+                std::string filename = GlobalConfig::instance().offload_path + tag + ".bin";
+                std::ifstream ifs(filename, std::ifstream::binary);
                 ifs.read(offload_buffer_, chunk_size_ * sizeof(T));
+                FT_CHECK_WITH_INFO(ifs, "Read from " + filename + " failed");
+                cpy_src = offload_buffer_;
             }
             check_cuda_error(
                 cudaMemcpyAsync(
-                    repl.first, src, chunk_size_ * sizeof(T),
+                    repl.first, cpy_src, chunk_size_ * sizeof(T),
                     cudaMemcpyHostToDevice, stream_));
-        } else {
-            //FT_LOG_ERROR("Cache hit");
         }
-        // Use specified type as workaround of undefined symbol
         if (post_callback == nullptr && dst != nullptr) {
             invokeCudaD2DcpyConvert<char, char>((char *)dst, (const char *)repl.first, chunk_size_ * sizeof(T), stream_);
         } else {
