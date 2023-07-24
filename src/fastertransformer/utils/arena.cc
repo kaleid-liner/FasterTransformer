@@ -21,7 +21,6 @@ std::future<void> MemoryArena<T>::allocate(const tag_t& tag, T* dst, const T* sr
     }
     auto future = pool_->push([=](int) {
         if (repl.first != nullptr && !repl.second && src != nullptr) {
-            FT_LOG_INFO(tag);
             const T* cpy_src = src;
             if (!GlobalConfig::instance().offload_path.empty()) {
                 std::string filename = GlobalConfig::instance().offload_path + tag + ".bin";

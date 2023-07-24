@@ -254,11 +254,8 @@ def translate(args_dict):
         if args_dict["ckpt_path"] is not None:
             # 31 tensors placeholders is needed for encoder
             # ft_encoder_weight.w = [torch.tensor(1, dtype=torch.float32).contiguous().cuda() for _ in range(31)]
-            ft_encoder_weight.random_weights_for_inference_test();
-            ft_decoding_weight.random_weights_for_inference_test();
-
-            # ft_encoder_weight.load_from_bin(args_dict["ckpt_path"], model_type)
-            # ft_decoding_weight.load_from_bin(args_dict["ckpt_path"], model_type)
+            ft_encoder_weight.empty_weights()
+            ft_decoding_weight.empty_weights()
         else:
             ft_encoder_weight.load_from_model(t5_model)
             ft_decoding_weight.load_from_model(t5_model)

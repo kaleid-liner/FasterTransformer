@@ -1,3 +1,5 @@
+export CUDA_VISIBLE_DEVICES=2
+
 python /workspace/FasterTransformer/examples/pytorch/t5/perf_benchmark.py \
         --batch_size 1 \
         --beam_width 4 \

@@ -21,6 +21,16 @@ import sys
 
 
 class FTT5DecodingWeight(object):
+
+    def empty_weights(self):
+        print("[INFO] Load weights for decoding from CPP.")
+
+        np_weight_dtype = self.weight_data_type
+        torch_weight_dtype = {np.float32: torch.float32, np.float16: torch.float16}[np_weight_dtype]
+
+        self.w = []
+        for _ in range(39):
+            self.w.append(torch.empty((1,1), dtype=torch_weight_dtype).contiguous().cuda())
     
     def random_weights_for_inference_test(self):
 
