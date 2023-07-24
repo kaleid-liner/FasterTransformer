@@ -13,4 +13,4 @@
 	url = https://github.com/jeonsworld/ViT-pytorch
 [submodule "3rdparty/cutlass"]
 	path = 3rdparty/cutlass
-	url = https://github.com/NVIDIA/cutlass.git
+	url = git@github.com:kaleid-liner/cutlass.git
