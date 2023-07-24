@@ -3,6 +3,7 @@
 #include <memory>
 #include <iostream>
 #include "cutlass/numeric_types.h"
+#include "src/fastertransformer/utils/ini.h"
 
 namespace fastertransformer {
 
@@ -34,23 +35,32 @@ public:
 
     void setDefault()
     {
-        arena_size = (size_t)20 * 1024 * 1024 * 1024;
+        loadDefault();
+    }
 
-        encoder_fetcher_mode = FetchType::FETCH_ON_DEMAND;
-        decoder_fetcher_mode = FetchType::PREFETCH;
+    void loadDefault()
+    {
+        mINI::INIFile file("/workspace/FasterTransformer/cpp_config.ini");
+        mINI::INIStructure ini;
+        file.read(ini);
 
-        profiling = true;
+        arena_size = std::stoul(ini["default"]["arena_size"]);
 
-        offload_path = "/data/ft-switch-base-8/1-gpu/";
-        disk_offload = false;
+        encoder_fetcher_mode = static_cast<FetchType>(std::stoi(ini["default"]["encoder_fetcher_mode"]));
+        decoder_fetcher_mode = static_cast<FetchType>(std::stoi(ini["default"]["decoder_fetcher_mode"]));
 
-        load_from_cpp = true;
+        profiling = std::stoi(ini["default"]["profiling"]);
 
-        use_cache = true;
+        offload_path = ini["default"]["offload_path"];
+        disk_offload = std::stoi(ini["default"]["disk_offload"]);
+        
+        load_from_cpp = std::stoi(ini["default"]["load_from_cpp"]);
 
-        quant_mode = QuantType::NO_QUANT;
+        use_cache = std::stoi(ini["default"]["use_cache"]);
 
-        vocab_size = 32128;
+        quant_mode = static_cast<QuantType>(std::stoi(ini["default"]["quant_mode"]));
+
+        vocab_size = std::stoll(ini["default"]["vocab_size"]);
     }
 
     void print() const
@@ -58,7 +68,14 @@ public:
         // TODO: replace with FT_LOG
         std::cout << "arena_size: " << arena_size << std::endl
                   << "encoder_fetcher_mode: " << int(encoder_fetcher_mode) << std::endl
-                  << "decoder_fetcher_mode: " << int(decoder_fetcher_mode) << std::endl;
+                  << "decoder_fetcher_mode: " << int(decoder_fetcher_mode) << std::endl
+                  << "profiling: " << profiling << std::endl
+                  << "offload_path: " << offload_path << std::endl
+                  << "disk_offload: " << disk_offload << std::endl
+                  << "load_from_cpp: " << load_from_cpp << std::endl
+                  << "use_cache: " << use_cache << std::endl
+                  << "quant_mode: " << int(quant_mode) << std::endl
+                  << "vocab_size: " << vocab_size << std::endl;
     }
 
 
