@@ -37,6 +37,12 @@ void Profiling::insert(cudaStream_t stream, EventType type)
         case EventType::MEM_END:
             mem_end_events_.push_back(event);
             break;
+        case EventType::BLOCK_START:
+            block_start_events_.push_back(event);
+            break;
+        case EventType::BLOCK_END:
+            block_end_events_.push_back(event);
+            break;
     }
 }
 
@@ -51,6 +57,8 @@ void Profiling::reset()
     clearEvents(comp_end_events_);
     clearEvents(mem_start_events_);
     clearEvents(mem_end_events_);
+    clearEvents(block_start_events_);
+    clearEvents(block_end_events_);
     cache_hit_rate_.reset();
 }
 
@@ -58,9 +66,10 @@ void Profiling::report() const
 {
     FT_CHECK(comp_start_events_.size() == comp_end_events_.size());
     FT_CHECK(mem_start_events_.size() == mem_end_events_.size());
+    FT_CHECK(block_start_events_.size() == block_end_events_.size());
 
     float ms;
-    AverageMeter<float> comp_lats, mem_lats;
+    AverageMeter<float> comp_lats, mem_lats, block_lats;
 
     std::cout << "Total events num:"
               << " (comp)" << comp_start_events_.size()
@@ -78,6 +87,12 @@ void Profiling::report() const
         mem_lats.update(ms);
     }
     std::cout << "Mem avg lats: " << mem_lats.getAvg() << " ms" << std::endl;
+
+    for (int i = 0; i < block_start_events_.size(); i++) {
+        cudaEventElapsedTime(&ms, block_start_events_[i], block_end_events_[i]);
+        block_lats.update(ms);
+    }
+    std::cout << "Block avg lats: " << block_lats.getAvg() << " ms" << std::endl;
 
     std::cout << "Average cache hit rate: " << cache_hit_rate_.getAvg() << std::endl;
 }

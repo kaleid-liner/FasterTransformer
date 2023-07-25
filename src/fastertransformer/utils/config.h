@@ -61,6 +61,8 @@ public:
         quant_mode = static_cast<QuantType>(std::stoi(ini["default"]["quant_mode"]));
 
         vocab_size = std::stoll(ini["default"]["vocab_size"]);
+
+        fetch_all = std::stoi(ini["default"]["fetch_all"]);
     }
 
     void print() const
@@ -75,7 +77,8 @@ public:
                   << "load_from_cpp: " << load_from_cpp << std::endl
                   << "use_cache: " << use_cache << std::endl
                   << "quant_mode: " << int(quant_mode) << std::endl
-                  << "vocab_size: " << vocab_size << std::endl;
+                  << "vocab_size: " << vocab_size << std::endl
+                  << "fetch_all: " << fetch_all << std::endl;
     }
 
 
@@ -96,6 +99,8 @@ public:
     QuantType quant_mode;
 
     int64_t vocab_size;  // workaround for missing vocab_size arg in encoder
+
+    bool fetch_all;  // for SE-MoE
 private:
     GlobalConfig() {}
 };

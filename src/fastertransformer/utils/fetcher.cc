@@ -153,10 +153,12 @@ void FetcherContext<ActT, WeightT, BiasT>::fetch(int *next_expert_for_source_row
     if (GlobalConfig::instance().profiling) {
         Profiling::instance().insert(stream, EventType::MEM_START);
     }
+
+    bool fetch_all = GlobalConfig::instance().fetch_all;
         
     // launch fetch on the stream, from source to working
-    for(int i = 0; i < this->active_experts_count; i++) {
-        int expert = this->row_expert_sorting_buffer[i];
+    for(int i = 0; i < (fetch_all ? num_experts : active_experts_count); i++) {
+        int expert = fetch_all ? i : row_expert_sorting_buffer[i];
         // expert = stdex::randint(0, (int)num_experts - 1);
         // std::cout << "Expert:" << expert << std::endl;
 
@@ -255,8 +257,6 @@ FetcherContext<ActT, WeightT, BiasT>::~FetcherContext() {
     FT_LOG_DEBUG(__PRETTY_FUNCTION__);
     FT_LOG_TRACE("futures left: %d", futures_.size());
     freeBuffer();
-    Profiling::instance().report();
-    Profiling::instance().reset();
     check_cuda_error(cudaStreamDestroy(stream));
 }
 

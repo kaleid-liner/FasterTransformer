@@ -16,6 +16,7 @@
 
 #include "src/fastertransformer/models/t5/T5Decoder.h"
 #include "src/fastertransformer/utils/config.h"
+#include "src/fastertransformer/utils/profiling.h"
 
 namespace fastertransformer {
 
@@ -420,6 +421,11 @@ void T5Decoder<T>::forward(std::vector<Tensor>*                         output_t
             continue;
         }
 
+        bool use_moe = std::find(moe_layer_index_.begin(), moe_layer_index_.end(), l) != moe_layer_index_.end();
+        if (use_moe && GlobalConfig::instance().profiling) {
+            Profiling::instance().insert(stream_, EventType::BLOCK_START);
+        }
+
         FT_LOG_TRACE("==== milestone decoder 910 layer %d", l);
         T* decoder_input  = (l == 0) ? input_tensors->at(0).getPtr<T>() : decoder_layer_output_;
         T* decoder_output = (l == num_layer_ - 1) ? output_tensors->at(0).getPtr<T>() : decoder_layer_output_;
@@ -577,7 +583,6 @@ void T5Decoder<T>::forward(std::vector<Tensor>*                         output_t
         TensorMap ffn_output_tensors;
 
         FT_LOG_TRACE("==== milestone decoder 941");
-        bool use_moe = std::find(moe_layer_index_.begin(), moe_layer_index_.end(), l) != moe_layer_index_.end();
         if (use_moe) {
             ffn_input_tensors.insert("moe_k", Tensor{MEMORY_CPU, TYPE_UINT64, {1}, &moe_k_});
 
@@ -664,6 +669,10 @@ void T5Decoder<T>::forward(std::vector<Tensor>*                         output_t
                        pipeline_para_.rank_ + 1,
                        pipeline_para_,
                        stream_);
+        }
+
+        if (use_moe && GlobalConfig::instance().profiling) {
+            Profiling::instance().insert(stream_, EventType::BLOCK_END);
         }
     }
 

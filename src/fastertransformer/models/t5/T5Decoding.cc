@@ -19,6 +19,8 @@
 #include "src/fastertransformer/kernels/bert_preprocess_kernels.h"
 #include "src/fastertransformer/kernels/gpt_kernels.h"
 #include "src/fastertransformer/layers/beam_search_layers/BaseBeamSearchLayer.h"
+#include "src/fastertransformer/utils/profiling.h"
+#include "src/fastertransformer/utils/config.h"
 
 namespace fastertransformer {
 
@@ -608,6 +610,10 @@ void T5Decoding<T>::forward(TensorMap*                 output_tensors,
     const bool   has_ia3_tasks   = input_tensors->isExist("ia3_tasks");
     allocateBuffer(batch_size, beam_width, max_seq_len, mem_max_seq_len, input_tensors->at("encoder_output").shape[2]);
 
+    if (GlobalConfig::instance().profiling) {
+        Profiling::instance().reset();
+    }
+
     {
         TensorMap input_map(*input_tensors);
         dynamic_decode_layer_->setup(batch_size, beam_width, &input_map);
@@ -1068,6 +1074,11 @@ void T5Decoding<T>::forward(TensorMap*                 output_tensors,
 
     if (is_free_buffer_after_forward_) {
         freeBuffer();
+    }
+
+
+    if (GlobalConfig::instance().profiling) {
+        Profiling::instance().report();
     }
 }
 
