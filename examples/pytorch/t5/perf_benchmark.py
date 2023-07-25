@@ -118,7 +118,8 @@ def translate(args_dict):
             use_gated_activation = ckpt_config.getboolean('structure', 'use_gated_activation')
             t5_with_moe= ckpt_config.getint('structure', 't5_with_moe') == 1
             weight_data_type = {"fp16": np.float16, "fp32": np.float32}[ckpt_config.get("encoder", "weight_data_type")]
-            activation_type = "gated-gelu" if use_gated_activation else "gelu" # change to gelu, which is default setting of Megatron T5
+            # activation_type = "gated-gelu" if use_gated_activation else "gelu" # change to gelu, which is default setting of Megatron T5
+            activation_type = ckpt_config.get('encoder', 'dense_act_fn')
             moe_layers_in_encoder = []
             moe_layers_in_decoder = []
             if (ckpt_config.get('structure', 'moe_layers_in_encoder') != '[]'):
