@@ -91,6 +91,8 @@ protected:
     // int8_mode_ == 2 for SmoothQuant O3 (per tensor scales)
     int int8_mode_ = 0;
 
+    T* bias_buf_ = nullptr;  // for MoE when bias = 0
+
     virtual ActivationType getActivationType() const
     {
         return ActivationType::InvalidType;

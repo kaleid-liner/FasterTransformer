@@ -90,8 +90,9 @@ FTT5Encoder<T>::FTT5Encoder(int64_t                        head_num,
     ft::GlobalConfig::instance().setDefault();
     if (ft::GlobalConfig::instance().load_from_cpp) {
         const std::string& offload_path = ft::GlobalConfig::instance().offload_path;
-        bool disk_offload = !offload_path.empty();
+        bool disk_offload = ft::GlobalConfig::instance().disk_offload;
         bool use_quant = ft::GlobalConfig::instance().quant_mode == ft::QuantType::WEIGHT_ONLY;
+        auto fetcher_mode = ft::GlobalConfig::instance().encoder_fetcher_mode;
 
         size_t intermediate_w_size = d_model * inter_size * cutlass::sizeof_bits<typename ft::GlobalConfig::weight_t>::value / 8;
         size_t output_w_size = inter_size * d_model * cutlass::sizeof_bits<typename ft::GlobalConfig::weight_t>::value / 8;
@@ -121,13 +122,35 @@ FTT5Encoder<T>::FTT5Encoder(int64_t                        head_num,
                     if (disk_offload) {
                         return;
                     }
+                    else if (fetcher_mode == ft::FetchType::GPU_ONLY) {
+                        std::vector<std::string> wi_filenames, wo_filenames;
+                        for (int e = 0; e < expert_num; e++) {
+                            wi_filenames.push_back(
+                                offload_path + "encoder.block." + std::to_string(i) + ".layer.1.mlp.experts.expert_" + std::to_string(e) + ".wi.weight.0.bin");
+                            wo_filenames.push_back(
+                                offload_path + "encoder.block." + std::to_string(i) + ".layer.1.mlp.experts.expert_" + std::to_string(e) + ".wo.weight.0.bin");
+                        }
+                        _weights.push_back(
+                            create_tensor_from_bin<int8_t>(
+                                {expert_num, intermediate_w_size}, wi_filenames, true));
+                        auto ptr = get_ptr<int8_t>(_weights[_weights.size() - 1]);
+                        encoder_layer_weights->ffn_weights_.intermediate_weight.kernel = reinterpret_cast<const T*>(ptr);
+                        _weights.push_back(
+                            create_tensor_from_bin<int8_t>(
+                                {expert_num, output_w_size}, wo_filenames, true));
+                        ptr = get_ptr<int8_t>(_weights[_weights.size() - 1]);
+                        encoder_layer_weights->ffn_weights_.output_weight.kernel = reinterpret_cast<const T*>(ptr);
+                    }
                     else {
-                        // Allocate weight on CPU
+                        // FetchType::FETCH_ON_DEMAND: allocate on CPU
+                        // FetchType::PREFETCH:        allocate on CPU
                         std::vector<std::string> expert_filenames;
                         for (int e = 0; e < expert_num; e++) {
                             expert_filenames.push_back(offload_path + "encoder::layer" + std::to_string(i) + "expert" + std::to_string(e) + ".bin");
                         }
-                        _weights.push_back(create_tensor_from_bin<int8_t>({expert_num, size_per_expert}, expert_filenames, false));
+                        _weights.push_back(
+                            create_tensor_from_bin<int8_t>(
+                                {expert_num, size_per_expert}, expert_filenames, false));
                         encoder_layer_weights->ffn_weights_.all_weight = get_ptr<int8_t>(_weights[_weights.size() - 1]);
                         return;
                     }

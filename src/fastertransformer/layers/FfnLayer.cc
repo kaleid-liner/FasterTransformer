@@ -133,15 +133,15 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
                     get_weight_src(ffn_weights_of_the_next_moe_layer_),
                     get_weight_src(ffn_weights));
                 FT_LOG_TRACE("=== milestones 101.6");
-                moe_fc_runner_->setFetcherContext(fetcher_context_.get());
             }
+            moe_fc_runner_->setFetcherContext(fetcher_context_.get());
 
             FT_LOG_TRACE("=== milestones 101.7");
             moe_fc_runner_->run_moe_fc(input_tensor,
                                        moe_gates_buf_,
                                        ffn_weights->intermediate_weight.kernel,
                                        ffn_weights->intermediate_weight.weight_only_quant_scale,
-                                       ffn_weights->intermediate_weight.bias,
+                                       ffn_weights->intermediate_weight.bias ? ffn_weights->intermediate_weight.bias : bias_buf_,
                                        activation_type,
                                        ffn_weights->output_weight.kernel,
                                        ffn_weights->output_weight.weight_only_quant_scale,
@@ -183,7 +183,7 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
                 moe_gates_buf_,
                 reinterpret_cast<const quant_t*>(ffn_weights->intermediate_weight.int8_kernel),
                 ffn_weights->intermediate_weight.weight_only_quant_scale,
-                ffn_weights->intermediate_weight.bias,
+                ffn_weights->intermediate_weight.bias ? ffn_weights->intermediate_weight.bias : bias_buf_,
                 activation_type,
                 reinterpret_cast<const quant_t*>(ffn_weights->output_weight.int8_kernel),
                 ffn_weights->output_weight.weight_only_quant_scale,
@@ -551,17 +551,21 @@ void FfnLayer<T>::set_layer(const std::string &layer_name, int layer_index, cons
     }
 
     if (int8_mode_ == 0) {
-        fetcher_context_->set_layer(
-            layer_name + std::to_string(next_layer_index),
-            layer_name + std::to_string(layer_index),
-            is_first_moe,
-            is_last_moe);
+        if (fetcher_context_) {
+            fetcher_context_->set_layer(
+                layer_name + std::to_string(next_layer_index),
+                layer_name + std::to_string(layer_index),
+                is_first_moe,
+                is_last_moe);
+        }
     } else {
-        int8_fetcher_context_->set_layer(
-            layer_name + std::to_string(next_layer_index),
-            layer_name + std::to_string(layer_index),
-            is_first_moe,
-            is_last_moe);
+        if (int8_fetcher_context_) {
+            int8_fetcher_context_->set_layer(
+                layer_name + std::to_string(next_layer_index),
+                layer_name + std::to_string(layer_index),
+                is_first_moe,
+                is_last_moe);
+        }
     }
 }
 
@@ -585,7 +589,7 @@ void FfnLayer<T>::allocateBuffer(size_t token_num, int moe_k, bool use_moe)
         }
 
         moe_fc_workspace_ = (char*)allocator_->reMalloc(moe_fc_workspace_, sizeof(char) * ws_size_moe, false);
-
+        bias_buf_ = (T*)allocator_->reMalloc(bias_buf_, sizeof(T) * pad_to_multiple_of_16(expert_num_ * inter_size_), true);
     }
     else {
         const auto type_size = int8_mode_ == 2 ? sizeof(int8_t) : sizeof(T);

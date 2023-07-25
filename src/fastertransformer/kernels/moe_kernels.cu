@@ -768,12 +768,10 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
     check_cuda_error(cudaStreamSynchronize(stream));
 
     // for prefetch
-    bool prefetch_enable = false;
     if (fetcher_context != nullptr) {
         FT_LOG_TRACE("begin do fetching");
         if (fetcher_context->mode == FetchType::PREFETCH) {
             // supopse each time we run topk_gating, we get the same source_rows_.
-            prefetch_enable = true;
 
             if (fetcher_context->first_time) {
                 FT_LOG_DEBUG("=== start prefetch layer 1 ===");
@@ -874,6 +872,10 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
     FT_LOG_TRACE("hidden_size: %d", hidden_size);
     FT_LOG_TRACE("k: %d", k);
 
+    if (GlobalConfig::instance().profiling) {
+        Profiling::instance().insert(stream, EventType::COMP_START);
+    }
+
     initialize_moe_routing_kernelLauncher(input_activations,            // [num_rows, hidden_size] input
                                           permuted_data_,               // [k * num_rows, hidden_size] output
                                           permuted_rows_,               // [k * num_rows]  input expanded_dest_row_to_expanded_source_row
@@ -891,7 +893,7 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
     check_cuda_error(cudaGetLastError());
 #endif
 
-    if (prefetch_enable) {
+    if (fetcher_context) {
         check_cuda_error(cudaMemcpyAsync(expert_for_source_row_backup_, expert_for_source_row, 
             sizeof(int) * num_rows * k, cudaMemcpyDeviceToDevice, stream));
         // sync
@@ -924,9 +926,6 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
 #endif
 
     FT_LOG_TRACE("=== milestone run_moe_fc 7 ===");
-    if (GlobalConfig::instance().profiling) {
-        Profiling::instance().insert(stream, EventType::COMP_START);
-    }
     moe_gemm_runner_.moe_gemm_bias_act(permuted_data_,              // [k * num_rows, hidden_size] input
                                        fc1_expert_weights,          // [num_experts, hidden_size, inter_size] input
                                        fc1_scales,                  // NULL

@@ -47,7 +47,7 @@ public:
             cache_->Put(std::to_string(t), (T*)((char*)ptr_ + pitch_sizes_[chunk_size_] * t));
         }
 
-        if (!GlobalConfig::instance().offload_path.empty()) {
+        if (GlobalConfig::instance().disk_offload) {
             check_cuda_error(cudaMallocHost(&offload_buffer_, chunk_size_ * sizeof(T)));
         }
 
@@ -164,7 +164,7 @@ public:
         auto post_callback = [&tensor_sizes = tensor_sizes_, dsts = dsts](const char* cached_ptr, cudaStream_t stream) {
             const char* ptr = cached_ptr;
             for (int i = 0; i < dsts.size(); ++i) {
-                invokeCudaD2DcpyConvert<char, char>(dsts[i], ptr, tensor_sizes[i], stream);
+                invokeCudaD2DcpyConvert<float, float>((float*)dsts[i], (float*)ptr, tensor_sizes[i] / sizeof(float), stream);
                 ptr += tensor_sizes[i];
             }
         };

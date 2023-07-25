@@ -157,7 +157,7 @@ void FetcherContext<ActT, WeightT, BiasT>::fetch(int *next_expert_for_source_row
     // launch fetch on the stream, from source to working
     for(int i = 0; i < this->active_experts_count; i++) {
         int expert = this->row_expert_sorting_buffer[i];
-        expert = stdex::randint(0, (int)num_experts - 1);
+        // expert = stdex::randint(0, (int)num_experts - 1);
         // std::cout << "Expert:" << expert << std::endl;
 
         // copy 4 things
@@ -209,12 +209,6 @@ int64_t fetcher_sync_wait_time = 0; // microseconds
 template<class ActT, class WeightT, class BiasT> 
 void FetcherContext<ActT, WeightT, BiasT>::sync() {
     FT_LOG_DEBUG(__PRETTY_FUNCTION__);
-    // if (last_time && mode == FetchType::PREFETCH) {
-    //     FT_LOG_TRACE("Abandon syncing at final layer");
-    //     FT_CHECK(futures_.size() )
-    //     return;
-    // }
-    // get the millisec
     for (auto& future : futures_) {
         future.wait();
     }
@@ -225,11 +219,12 @@ void FetcherContext<ActT, WeightT, BiasT>::sync() {
     check_cuda_error(cudaStreamSynchronize(stream));
 
     // update dst from working (swap them)
-    std::swap(this->intermediate_dst, this->intermediate_working);
-    std::swap(this->output_dst, this->output_working);
-    std::swap(this->intermediate_bias_dst, this->intermediate_bias_working);
-    std::swap(this->intermediate_scale_dst, this->intermediate_scale_working);
-    std::swap(this->output_scale_dst, this->output_scale_working);
+    std::swap(intermediate_dst, intermediate_working);
+    std::swap(output_dst, output_working);
+    std::swap(intermediate_bias_dst, intermediate_bias_working);
+    std::swap(intermediate_scale_dst, intermediate_scale_working);
+    std::swap(output_scale_dst, output_scale_working);
+    std::swap(expert_sparse_idx, expert_sparse_idx_working);
 }
 
 // called in FfnLayer.cc

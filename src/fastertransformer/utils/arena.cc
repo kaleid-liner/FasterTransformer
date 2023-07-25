@@ -20,9 +20,10 @@ std::future<void> MemoryArena<T>::allocate(const tag_t& tag, T* dst, const T* sr
         Profiling::instance().cacheHit(repl.second);
     }
     auto future = pool_->push([=](int) {
-        if (repl.first != nullptr && !repl.second && src != nullptr) {
+        if (!GlobalConfig::instance().use_cache  // if not use_cache, do this anyway
+            || (repl.first != nullptr && !repl.second && src != nullptr)) {
             const T* cpy_src = src;
-            if (!GlobalConfig::instance().offload_path.empty()) {
+            if (GlobalConfig::instance().disk_offload) {
                 std::string filename = GlobalConfig::instance().offload_path + tag + ".bin";
                 std::ifstream ifs(filename, std::ifstream::binary);
                 ifs.read(offload_buffer_, chunk_size_ * sizeof(T));
@@ -35,7 +36,7 @@ std::future<void> MemoryArena<T>::allocate(const tag_t& tag, T* dst, const T* sr
                     cudaMemcpyHostToDevice, stream_));
         }
         if (post_callback == nullptr && dst != nullptr) {
-            invokeCudaD2DcpyConvert<char, char>((char *)dst, (const char *)repl.first, chunk_size_ * sizeof(T), stream_);
+            invokeCudaD2DcpyConvert<float, float>((float*)dst, (const float*)repl.first, chunk_size_ * sizeof(T) / sizeof(float), stream_);
         } else {
             post_callback(repl.first, stream_);
         }
