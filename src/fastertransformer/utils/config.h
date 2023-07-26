@@ -63,6 +63,8 @@ public:
         vocab_size = std::stoll(ini["default"]["vocab_size"]);
 
         fetch_all = std::stoi(ini["default"]["fetch_all"]);
+
+        forced_num_experts = std::stoi(ini["default"]["forced_num_experts"]);
     }
 
     void print() const
@@ -78,7 +80,8 @@ public:
                   << "use_cache: " << use_cache << std::endl
                   << "quant_mode: " << int(quant_mode) << std::endl
                   << "vocab_size: " << vocab_size << std::endl
-                  << "fetch_all: " << fetch_all << std::endl;
+                  << "fetch_all: " << fetch_all << std::endl
+                  << "forced_num_experts: " << forced_num_experts << std::endl;
     }
 
 
@@ -101,6 +104,8 @@ public:
     int64_t vocab_size;  // workaround for missing vocab_size arg in encoder
 
     bool fetch_all;  // for SE-MoE
+
+    int forced_num_experts;  // If 0, not force number of active experts
 private:
     GlobalConfig() {}
 };

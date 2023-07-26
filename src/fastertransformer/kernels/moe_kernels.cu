@@ -681,6 +681,39 @@ check_memory(const T* ptr)
     s[0] = ptr[idx];
 }
 
+__global__ void
+force_total_rows_before_expert_kernel(int64_t*  total_rows_before_expert, 
+                                      const int num_experts,
+                                      const int total_rows)
+{
+
+    // First, compute the global tid. We only need 1 thread per expert.
+    const int expert = blockIdx.x * blockDim.x + threadIdx.x;
+    if (expert >= num_experts)
+        return;
+
+    // This should construct the last index where each expert occurs.
+    if (expert == num_experts - 1) {
+        total_rows_before_expert[expert] = total_rows;
+    } else {
+        total_rows_before_expert[expert] = expert + 1;
+    }
+}
+
+void force_total_rows_before_expert(int64_t*     total_rows_before_expert, 
+                                    const int    num_experts,
+                                    const int    total_rows,
+                                    cudaStream_t stream)
+{
+    FT_LOG_DEBUG(__PRETTY_FUNCTION__);
+    const int threads = std::min(1024, num_experts);
+    const int blocks  = (num_experts + threads - 1) / threads;
+
+    force_total_rows_before_expert_kernel<<<blocks, threads, 0, stream>>>(
+        total_rows_before_expert, num_experts, total_rows);
+}
+
+
 template<typename T, typename WeightType, typename Enable>
 void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          input_activations,     // [num_rows, hidden_size]
                                                            const T*          gating_output,         // [num_rows, expert_nums]
@@ -915,10 +948,16 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
     FT_LOG_TRACE("total_rows_before_expert_: %p", total_rows_before_expert_);
 
     const int expanded_active_expert_rows = k * active_rows;    
-    FT_LOG_TRACE("=== compute_total_rows_before_expert ===");
-    FT_LOG_TRACE("expanded_active_expert_rows: %d", expanded_active_expert_rows);
-    compute_total_rows_before_expert(
-        permuted_experts_, expanded_active_expert_rows, num_experts, total_rows_before_expert_, stream);
+
+    if (GlobalConfig::instance().forced_num_experts) {
+        num_experts = GlobalConfig::instance().forced_num_experts;
+        force_total_rows_before_expert(total_rows_before_expert_, num_experts, expanded_active_expert_rows, stream);
+    } else {
+        FT_LOG_TRACE("=== compute_total_rows_before_expert ===");
+        FT_LOG_TRACE("expanded_active_expert_rows: %d", expanded_active_expert_rows);
+        compute_total_rows_before_expert(
+            permuted_experts_, expanded_active_expert_rows, num_experts, total_rows_before_expert_, stream);
+    }
 
 #ifndef NDEBUG
     cudaDeviceSynchronize();

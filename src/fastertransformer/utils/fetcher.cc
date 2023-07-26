@@ -155,12 +155,13 @@ void FetcherContext<ActT, WeightT, BiasT>::fetch(int *next_expert_for_source_row
     }
 
     bool fetch_all = GlobalConfig::instance().fetch_all;
+    int forced_num_experts = GlobalConfig::instance().forced_num_experts;
         
+    int _active_experts_count = forced_num_experts ? forced_num_experts : active_experts_count;
+    _active_experts_count = fetch_all ? num_experts : _active_experts_count;
     // launch fetch on the stream, from source to working
-    for(int i = 0; i < (fetch_all ? num_experts : active_experts_count); i++) {
-        int expert = fetch_all ? i : row_expert_sorting_buffer[i];
-        // expert = stdex::randint(0, (int)num_experts - 1);
-        // std::cout << "Expert:" << expert << std::endl;
+    for(int i = 0; i < _active_experts_count; i++) {
+        int expert = (forced_num_experts || fetch_all) ? i : row_expert_sorting_buffer[i];
 
         // copy 4 things
         // 1. intermediate_w

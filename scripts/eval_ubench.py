@@ -31,27 +31,28 @@ def main():
         "switch-base-32",
         "switch-base-64",
         "switch-base-128",
+        "switch-base-256",
         "switch-large-128",
     ]
-    batch_sizes = [
+    batch_size = 16
+    methods = ["GPU-only", "Pre-gated", "DeepSpeed", "SE-MoE"]
+    active_experts = [
         1,
         2,
         4,
         8,
         16,
-        32,
     ]
-    methods = ["GPU-only", "Pre-gated", "DeepSpeed", "SE-MoE"]
 
     cpp_config = configparser.ConfigParser()
     cpp_config.read("/workspace/FasterTransformer/cpp_config.ini")
 
-    block_lats = {"bs": batch_sizes}
-    throughputs = {"bs": batch_sizes}
+    block_lats = {"active experts": active_experts}
+    throughputs = {"active experts": active_experts}
     hardware_infos = {
-        "CPU": [get_cpu_info()["brand_raw"]] * len(batch_sizes),
-        "RAM (GB)": [int(psutil.virtual_memory().total / 1024 / 1024 / 1024)] * len(batch_sizes),
-        "GPU": [torch.cuda.get_device_name()] * len(batch_sizes),
+        "CPU": [get_cpu_info()["brand_raw"]] * len(active_experts),
+        "RAM (GB)": [int(psutil.virtual_memory().total / 1024 / 1024 / 1024)] * len(active_experts),
+        "GPU": [torch.cuda.get_device_name()] * len(active_experts),
     }
     block_lats.update(hardware_infos)
     throughputs.update(hardware_infos)
@@ -60,8 +61,7 @@ def main():
         for model in models:
             _block_lats = []
             _throughputs = []
-
-            for batch_size in batch_sizes:
+            for active_expert in active_experts:
                 iterations = 4
                 print("Running {} {} {}".format(model, method, batch_size))
                 if method == "GPU-only":
@@ -90,7 +90,7 @@ def main():
                     "quant_mode": "0",
                     "vocab_size": "32128",
                     "fetch_all": str(int(method == "SE-MoE")),
-                    "forced_num_experts": "0",
+                    "forced_num_experts": "{}".format(active_expert),
                 }
 
                 with open("/workspace/FasterTransformer/cpp_config.ini", "w") as fp:
@@ -130,10 +130,10 @@ def main():
 
             # Generate CSV after each model and method runned
             df = pd.DataFrame.from_dict(block_lats)
-            df.to_csv("block_lats.csv", index=False)
+            df.to_csv("ubench_block_lats.csv", index=False)
 
             df = pd.DataFrame.from_dict(throughputs)
-            df.to_csv("throughputs.csv", index=False)
+            df.to_csv("ubench_throughputs.csv", index=False)
 
 
 if __name__ == "__main__":
