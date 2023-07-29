@@ -1,0 +1,2 @@
+active experts,CPU,RAM (GB),GPU,switch-base-16/GPU-only,switch-base-16/Pre-gated,switch-base-16/DeepSpeed,switch-base-16/SE-MoE
+16,AMD EPYC 7V12 64-Core Processor,1771,NVIDIA A100-SXM4-80GB,1.38034,13.6061,14.3126,13.6651
