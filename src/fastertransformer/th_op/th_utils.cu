@@ -17,6 +17,7 @@
 #include "src/fastertransformer/th_op/th_utils.h"
 #include "src/fastertransformer/utils/config.h"
 #include "src/fastertransformer/utils/memory_utils.h"
+#include <fstream>
 
 namespace ft = fastertransformer;
 
@@ -114,8 +115,11 @@ torch::Tensor create_tensor_from_bin(const std::vector<size_t>& shape, const std
         shape :
         std::vector<size_t>(shape.begin() + 1, shape.end());
     for (const auto& filename : filenames) {
+        // TODO: Refactor loadWeightFromBin
         if (gpu) {
             ft::loadWeightFromBin<T>(ptr, _shape, filename, model_file_type);
+        } else {
+            ft::loadWeightFromBin<T>(ptr, _shape, filename, model_file_type, false);
         }
         ptr += tensor.numel() / filenames.size();
     }

@@ -167,7 +167,7 @@ def translate(args_dict):
     q_scaling = 1.0 / (math.sqrt(encoder_config.d_kv))
     if (model_type in ["Megatron", "Megatron-DeepSpeed"]):
         ## update configs when using Megatron model structure
-        q_scaling = 1.0
+        # q_scaling = 1.0
 
         encoder_config.d_model = ckpt_config.getint('encoder', 'd_model')
         encoder_config.vocab_size = ckpt_config.getint('encoder', 'vocab_size')
@@ -226,7 +226,7 @@ def translate(args_dict):
             cmd = f"./bin/t5_gemm {math.ceil(batch_size / pipeline_para_size)} {1} {128} " \
                 f"{encoder_config.d_model} {encoder_config.num_heads} {encoder_config.d_kv} {encoder_config.d_ff} " \
                 f"{decoder_config.d_model} {decoder_config.num_heads} {decoder_config.d_kv} {decoder_config.d_ff} " \
-                f"{decoder_config.vocab_size} {is_fp16} {tensor_para_size} 1 1 > .tmp_gemm.log"
+                f"{decoder_config.vocab_size} {is_fp16} {tensor_para_size} 1 > .tmp_gemm.log"
             print(f"Run gemm test: {cmd}")
             os.system(cmd)
 

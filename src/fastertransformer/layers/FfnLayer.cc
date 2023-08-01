@@ -38,7 +38,6 @@ void FfnLayer<T>::forward(std::vector<fastertransformer::Tensor>*       output_t
 template<typename T>
 const char* get_weight_src(const FfnWeight<T>* ffn_weights)
 {
-    FT_LOG_TRACE("ffn_weights: %p", ffn_weights);
     if (ffn_weights == nullptr) return nullptr;
     return reinterpret_cast<const char*>(ffn_weights->all_weight);
 }

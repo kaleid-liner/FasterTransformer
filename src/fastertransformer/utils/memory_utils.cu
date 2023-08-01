@@ -341,11 +341,21 @@ std::vector<T> loadWeightFromBinHelper(std::vector<size_t> shape, std::string fi
 }
 
 template<typename T, typename T_IN>
-int loadWeightFromBinFunc(T* ptr, std::vector<size_t> shape, std::string filename)
+int loadWeightFromBinFunc(T* ptr, std::vector<size_t> shape, std::string filename, bool is_gpu)
 {
     std::vector<T_IN> host_array = loadWeightFromBinHelper<T_IN>(shape, filename);
 
     if (host_array.empty()) {
+        return 0;
+    }
+
+    if (!is_gpu) {
+        if (std::is_same<T, T_IN>::value) {
+            memcpy(ptr, host_array.data(), host_array.size() * sizeof(T));
+        }
+        else {
+            FT_CHECK_WITH_INFO(false, "Unsupported data type convert in CPU");
+        }
         return 0;
     }
 
@@ -362,49 +372,50 @@ int loadWeightFromBinFunc(T* ptr, std::vector<size_t> shape, std::string filenam
     return 0;
 }
 
-template int loadWeightFromBinFunc<float, float>(float* ptr, std::vector<size_t> shape, std::string filename);
-template int loadWeightFromBinFunc<half, float>(half* ptr, std::vector<size_t> shape, std::string filename);
-template int loadWeightFromBinFunc<float, half>(float* ptr, std::vector<size_t> shape, std::string filename);
-template int loadWeightFromBinFunc<half, half>(half* ptr, std::vector<size_t> shape, std::string filename);
-template int loadWeightFromBinFunc<int8_t, int8_t>(int8_t* ptr, std::vector<size_t> shape, std::string filename);
+template int loadWeightFromBinFunc<float, float>(float* ptr, std::vector<size_t> shape, std::string filename, bool is_gpu);
+template int loadWeightFromBinFunc<half, float>(half* ptr, std::vector<size_t> shape, std::string filename, bool is_gpu);
+template int loadWeightFromBinFunc<float, half>(float* ptr, std::vector<size_t> shape, std::string filename, bool is_gpu);
+template int loadWeightFromBinFunc<half, half>(half* ptr, std::vector<size_t> shape, std::string filename, bool is_gpu);
+template int loadWeightFromBinFunc<int8_t, int8_t>(int8_t* ptr, std::vector<size_t> shape, std::string filename, bool is_gpu);
 #ifdef ENABLE_BF16
 template int
-loadWeightFromBinFunc<__nv_bfloat16, float>(__nv_bfloat16* ptr, std::vector<size_t> shape, std::string filename);
+loadWeightFromBinFunc<__nv_bfloat16, float>(__nv_bfloat16* ptr, std::vector<size_t> shape, std::string filename, bool is_gpu);
 template int
-loadWeightFromBinFunc<__nv_bfloat16, half>(__nv_bfloat16* ptr, std::vector<size_t> shape, std::string filename);
-template int loadWeightFromBinFunc<float, __nv_bfloat16>(float* ptr, std::vector<size_t> shape, std::string filename);
-template int loadWeightFromBinFunc<half, __nv_bfloat16>(half* ptr, std::vector<size_t> shape, std::string filename);
+loadWeightFromBinFunc<__nv_bfloat16, half>(__nv_bfloat16* ptr, std::vector<size_t> shape, std::string filename, bool is_gpu);
+template int loadWeightFromBinFunc<float, __nv_bfloat16>(float* ptr, std::vector<size_t> shape, std::string filename, bool is_gpu);
+template int loadWeightFromBinFunc<half, __nv_bfloat16>(half* ptr, std::vector<size_t> shape, std::string filename, bool is_gpu);
 template int loadWeightFromBinFunc<__nv_bfloat16, __nv_bfloat16>(__nv_bfloat16*      ptr,
                                                                  std::vector<size_t> shape,
-                                                                 std::string         filename);
+                                                                 std::string         filename,
+                                                                 bool                is_gpu);
 #endif  // ENABLE_BF16
-template int loadWeightFromBinFunc<int, int>(int* ptr, std::vector<size_t> shape, std::string filename);
+template int loadWeightFromBinFunc<int, int>(int* ptr, std::vector<size_t> shape, std::string filename, bool is_gpu);
 #ifdef ENABLE_FP8
 template int
-loadWeightFromBinFunc<__nv_fp8_e4m3, float>(__nv_fp8_e4m3* ptr, std::vector<size_t> shape, std::string filename);
+loadWeightFromBinFunc<__nv_fp8_e4m3, float>(__nv_fp8_e4m3* ptr, std::vector<size_t> shape, std::string filename, bool is_gpu);
 #endif  // ENABLE_FP8
 
 template<typename T>
-int loadWeightFromBin(T* ptr, std::vector<size_t> shape, std::string filename, FtCudaDataType model_file_type)
+int loadWeightFromBin(T* ptr, std::vector<size_t> shape, std::string filename, FtCudaDataType model_file_type, bool is_gpu)
 {
     switch (model_file_type) {
         case FtCudaDataType::FP32:
-            loadWeightFromBinFunc<T, float>(ptr, shape, filename);
+            loadWeightFromBinFunc<T, float>(ptr, shape, filename, is_gpu);
             break;
         case FtCudaDataType::FP16:
-            loadWeightFromBinFunc<T, half>(ptr, shape, filename);
+            loadWeightFromBinFunc<T, half>(ptr, shape, filename, is_gpu);
             break;
         case FtCudaDataType::INT8:
-            loadWeightFromBinFunc<T, int8_t>(ptr, shape, filename);
+            loadWeightFromBinFunc<T, int8_t>(ptr, shape, filename, is_gpu);
             break;
 #ifdef ENABLE_BF16
         case FtCudaDataType::BF16:
-            loadWeightFromBinFunc<T, __nv_bfloat16>(ptr, shape, filename);
+            loadWeightFromBinFunc<T, __nv_bfloat16>(ptr, shape, filename, is_gpu);
             break;
 #endif
 #ifdef ENABLE_FP8
         case FtCudaDataType::FP8:
-            loadWeightFromBinFunc<T, float>(ptr, shape, filename);
+            loadWeightFromBinFunc<T, float>(ptr, shape, filename, is_gpu);
             break;
 #endif
         default:
@@ -415,28 +426,28 @@ int loadWeightFromBin(T* ptr, std::vector<size_t> shape, std::string filename, F
 }
 
 template<>
-int loadWeightFromBin(int* ptr, std::vector<size_t> shape, std::string filename, FtCudaDataType model_file_type)
+int loadWeightFromBin(int* ptr, std::vector<size_t> shape, std::string filename, FtCudaDataType model_file_type, bool is_gpu)
 {
-    loadWeightFromBinFunc<int, int>(ptr, shape, filename);
+    loadWeightFromBinFunc<int, int>(ptr, shape, filename, is_gpu);
     return 0;
 }
 
 template int
-loadWeightFromBin(float* ptr, std::vector<size_t> shape, std::string filename, FtCudaDataType model_file_type);
+loadWeightFromBin(float* ptr, std::vector<size_t> shape, std::string filename, FtCudaDataType model_file_type, bool is_gpu);
 template int
-loadWeightFromBin(half* ptr, std::vector<size_t> shape, std::string filename, FtCudaDataType model_file_type);
+loadWeightFromBin(half* ptr, std::vector<size_t> shape, std::string filename, FtCudaDataType model_file_type, bool is_gpu);
 template int
-loadWeightFromBin(int8_t* ptr, std::vector<size_t> shape, std::string filename, FtCudaDataType model_file_type);
+loadWeightFromBin(int8_t* ptr, std::vector<size_t> shape, std::string filename, FtCudaDataType model_file_type, bool is_gpu);
 #ifdef ENABLE_BF16
 template int
-loadWeightFromBin(__nv_bfloat16* ptr, std::vector<size_t> shape, std::string filename, FtCudaDataType model_file_type);
+loadWeightFromBin(__nv_bfloat16* ptr, std::vector<size_t> shape, std::string filename, FtCudaDataType model_file_type, bool is_gpu);
 #endif
 #ifdef ENABLE_FP8
 template int
-loadWeightFromBin(__nv_fp8_e4m3* ptr, std::vector<size_t> shape, std::string filename, FtCudaDataType model_file_type);
+loadWeightFromBin(__nv_fp8_e4m3* ptr, std::vector<size_t> shape, std::string filename, FtCudaDataType model_file_type, bool is_gpu);
 #endif
 template int
-loadWeightFromBin(int* ptr, std::vector<size_t> shape, std::string filename, FtCudaDataType model_file_type);
+loadWeightFromBin(int* ptr, std::vector<size_t> shape, std::string filename, FtCudaDataType model_file_type, bool is_gpu);
 
 template<typename T, typename T_IN>
 int loadWeightFromBinAndQuantizeForWeightOnlyFunc(int8_t*             ptr,
@@ -628,6 +639,16 @@ void saveToBinary(const int* ptr, const size_t size, std::string filename)
     std::ofstream out(filename, std::ios::out | std::ios::binary);
     FT_CHECK_WITH_INFO(out.is_open(), "Fail to open file " + filename);
     out.write((char*)h_ptr.data(), size * sizeof(int));
+}
+
+template<>
+void saveToBinary(const int64_t* ptr, const size_t size, std::string filename)
+{
+    std::vector<int64_t> h_ptr(size);
+    cudaD2Hcpy(h_ptr.data(), ptr, size);
+    std::ofstream out(filename, std::ios::out | std::ios::binary);
+    FT_CHECK_WITH_INFO(out.is_open(), "Fail to open file " + filename);
+    out.write((char*)h_ptr.data(), size * sizeof(int64_t));
 }
 
 template<typename T_IN, typename T_fake_type>

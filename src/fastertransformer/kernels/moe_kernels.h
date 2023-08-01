@@ -195,18 +195,18 @@ private:
     MoeGemmRunner<T, WeightType> moe_gemm_runner_;
 
     // Pointers
-    int*  source_rows_; // [k * num_rows]
-    int*  permuted_rows_; // [k * num_rows]
-    int*  permuted_experts_; // [k * num_rows]
-    char* sorter_ws_;
-    T*    permuted_data_; // [k * num_rows * hidden_size]
-    T*    softmax_out_;
+    int*     source_rows_; // [k * num_rows]
+    int*     permuted_rows_; // [k * num_rows]
+    int*     permuted_experts_; // [k * num_rows]
+    char*    sorter_ws_;
+    T*       permuted_data_; // [k * num_rows * hidden_size]
+    T*       softmax_out_;
     int64_t* total_rows_before_expert_; // num_experts
+    T*       fc1_result_; // k * num_rows * inter_size
 
-    T* fc1_result_; // k * num_rows * inter_size
-
-    int *expert_for_source_row_backup_; // for moe prefetching
-    FetcherContext<T, WeightType> *fetcher_context = nullptr;
+    // For MoE prefetch
+    T*                             next_expert_scales_;
+    FetcherContext<T, WeightType>* fetcher_context_ = nullptr;
 };
 
 template<typename WeightType>
@@ -282,14 +282,5 @@ public:
         FT_CHECK_WITH_INFO(false, "FP32 x int8 MoE not supported.");
     }
 };
-
-
-void get_expert_sparse_idx_kernelLauncher(
-    int *expert_sparse_idx,
-    const int *expert_for_source_row,
-    const int num_rows,
-    const int num_experts,
-    int *active_expert_count // cpu
-    );
 
 }  // namespace fastertransformer

@@ -29,15 +29,20 @@ template<class ActT, class WeightT = ActT, class BiasT = ActT>
 class FetcherContext {
     // TODO: Refactor naming
 private:
-    WeightT *intermediate_working;          // on-GPU
-    WeightT *output_working;                // on-GPU
-    BiasT *intermediate_bias_working;       // on-GPU
-    BiasT *intermediate_scale_working;
-    BiasT *output_scale_working;
-    int *expert_sparse_idx_working;         // on-GPU
+    WeightT* intermediate_working_;          // on-GPU
+    WeightT* output_working_;                // on-GPU
+    BiasT*   intermediate_bias_working_;       // on-GPU
+    ActT*    intermediate_scale_working_;
+    ActT*    output_scale_working_;
 
-    int *row_expert_sorting_buffer;         // on-CPU
-    int *expert_sparse_idx_cpu;             // on-CPU
+    WeightT* intermediate_dst_;        // on-GPU buffer
+    WeightT* output_dst_;              // on-GPU buffer
+    BiasT*   intermediate_bias_dst_;   // on-GPU buffer
+    ActT*    intermediate_scale_dst_;
+    ActT*    output_scale_dst_;
+
+    int* row_expert_sorting_buffer;         // on-CPU
+    int* expert_sparse_idx_cpu;             // on-CPU
 
     size_t intermediate_w_size_per_expert_;
     size_t output_w_size_per_expert_;
@@ -46,13 +51,11 @@ private:
     size_t output_scale_size_per_expert_;
     size_t weight_size_per_expert_;
 
-    size_t num_rows;
-    size_t num_experts;
+    size_t num_rows_;
+    size_t num_experts_;
 
-    std::vector<void*> big_buffer_on_device;
-
-    bool buffer_allocated = false;
-    IAllocator* allocator;
+    bool is_allocate_buffer_;
+    IAllocator* allocator_;
 
     std::string next_layer_name_;
     std::string current_layer_name_;
@@ -60,6 +63,10 @@ private:
 
     const char* next_weight_src_;
     const char* current_weight_src_;
+
+    int*  permuted_experts_; // CPU
+
+    int num_active_experts_;
 
 public:
     cudaStream_t stream;
@@ -70,23 +77,10 @@ public:
     bool first_time;  // first layer should fetch itself and prefetch next layer
     bool last_time;  //last layer should not prefetch
 
-    // working and dst for the next layer use
-    int *expert_for_source_row_fetching; // on-GPU buffer
-
-    // dst space (things we need to use after sync)
-    int *expert_sparse_idx;          // on-GPU
-    int active_experts_count;        // on CPU
-    
-    WeightT *intermediate_dst;        // on-GPU buffer
-    WeightT *output_dst;              // on-GPU buffer
-    BiasT *intermediate_bias_dst;   // on-GPU buffer
-    BiasT *intermediate_scale_dst;
-    BiasT *output_scale_dst;
-
     // 1. copy to expert_for_source_row_fetching
     // 2. calc expert_sparse_idx_working
     // 3. launch fetch on the stream, from source to working
-    void fetch(int *next_expert_for_source_row, size_t num_rows, bool prefetch);
+    void fetch(const int* permuted_experts, bool prefetch);
 
     // finish previous job
     // drop all previous dst space things and update them.
@@ -97,19 +91,28 @@ public:
 
     void set_layer(const std::string& next_layer_name, const std::string& current_layer_name, bool is_first_moe, bool is_last_moe);
 
-    FetcherContext(
-        FetchType mode, int num_experts, 
-        size_t intermediate_w_size_per_expert, size_t output_w_size_per_expert, 
-        size_t intermediate_b_size_per_expert,
-        size_t intermediate_scale_size_per_expert, size_t output_scale_size_per_expert,
-        size_t arena_size);
+    std::string get_layer_name() const { return current_layer_name_; }
+
+    void get_weights(int           & num_active_experts,
+                     const WeightT*& fc1_expert_weights,
+                     const WeightT*& fc2_expert_weights,
+                     const BiasT*  & fc1_expert_biases,
+                     const ActT*   & fc1_scales,
+                     const ActT*   & fc2_scales) const;
+
+    FetcherContext(FetchType mode, 
+                   int num_experts, 
+                   size_t intermediate_w_size_per_expert,
+                   size_t output_w_size_per_expert, 
+                   size_t intermediate_b_size_per_expert,
+                   size_t intermediate_scale_size_per_expert,
+                   size_t output_scale_size_per_expert,
+                   size_t arena_size);
     ~FetcherContext();
 
     void allocateBuffer(IAllocator* allocator, size_t num_rows);
     void freeBuffer();
     
-    void* mallocOnDeviceAligned(size_t size);
-
     using tag_t = typename GroupedMemoryArena::tag_t;
 };
 

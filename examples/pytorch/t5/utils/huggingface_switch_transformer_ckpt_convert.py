@@ -77,8 +77,8 @@ def fuse_expert(model, factor, saved_dir, np_weight_data_type):
     for name, param in model.named_parameters():
         if name.find("mlp") != -1 and name.find("wi") != -1:
             wo_name = name.replace("wi", "wo")
-            all_weight = torch.cat([torch.flatten(param),
-                                    torch.flatten(model_dict[wo_name])])
+            all_weight = torch.cat([torch.flatten(param.T),
+                                    torch.flatten(model_dict[wo_name].T)])
             all_weight = all_weight.cpu().detach().numpy().astype(np_weight_data_type)
 
             split_vals = np.split(all_weight, factor, axis=-1)

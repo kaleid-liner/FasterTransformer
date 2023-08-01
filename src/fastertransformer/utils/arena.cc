@@ -15,6 +15,7 @@ template <typename T>
 std::future<void> MemoryArena<T>::allocate(const tag_t& tag, T* dst, const T* src,
                                            std::function<void(const T*, cudaStream_t)> post_callback)
 {
+    FT_LOG_INFO(tag);
     auto repl = cache_->PutKey(tag, nullptr);
     if (GlobalConfig::instance().profiling) {
         Profiling::instance().cacheHit(repl.second);

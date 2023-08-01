@@ -53,7 +53,8 @@ template<typename T>
 int loadWeightFromBin(T*                  ptr,
                       std::vector<size_t> shape,
                       std::string         filename,
-                      FtCudaDataType      model_file_type = FtCudaDataType::FP32);
+                      FtCudaDataType      model_file_type = FtCudaDataType::FP32,
+                      bool                is_gpu = true);
 
 template<typename T>
 int loadWeightFromBinAndQuantizeForWeightOnly(int8_t*             quantized_weight_ptr,
