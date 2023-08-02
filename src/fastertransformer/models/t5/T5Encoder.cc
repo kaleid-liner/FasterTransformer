@@ -471,8 +471,8 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
     //      output_attentions [batch_size, layer_num, num_heads, seqlen, seqlen], optional
 
     FT_LOG_DEBUG(__PRETTY_FUNCTION__);
-    //loadWeightFromBin(input_tensors->at("input_ids").getPtr<T>(), {input_tensors->at("input_ids").size()}, "/data/debug/encoder_input_ids.bin", FtCudaDataType::FP32);
-    saveToBinary(input_tensors->at("input_ids").getPtr<T>(), input_tensors->at("input_ids").size(), "/data/debug/encoder_input_ids.bin");
+    // loadWeightFromBin(input_tensors->at("input_ids").getPtr<T>(), {input_tensors->at("input_ids").size()}, "/data/debug/encoder_input_ids.bin", FtCudaDataType::FP32);
+    // saveToBinary(input_tensors->at("input_ids").getPtr<T>(), input_tensors->at("input_ids").size(), "/data/debug/encoder_input_ids.bin");
     const bool use_inputs_embeds = input_tensors->isExist("inputs_embeds");
     if (use_inputs_embeds) {
         if (input_tensors->isExist("input_ids")) {
@@ -669,7 +669,6 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
         }
 
         sync_check_cuda_error();
-        saveToBinary(t5_encoder_emb_buf_, local_batch_size * request_seq_len * d_model_, "/data/debug/inputs_embeds.bin");
 
         FT_LOG_TRACE("=== milestone 4");
         size_t  h_token_num;
@@ -1091,7 +1090,6 @@ void T5Encoder<T>::forward(TensorMap*                output_tensors,
     if (is_free_buffer_after_forward_ == true) {
         freeBuffer();
     }
-    saveToBinary(output_tensors->at("output_hidden_state").getPtr<T>(), output_tensors->at("output_hidden_state").size(), "/data/debug/output_hidden_state.bin");
     sync_check_cuda_error();
 
     if (pipeline_para_.world_size_ > 1) {

@@ -170,9 +170,6 @@ void FetcherContext<ActT, WeightT, BiasT>::get_weights(int           & num_activ
                                                        const ActT*   & fc1_scales,
                                                        const ActT*   & fc2_scales) const
 {
-    static constexpr bool scales_required =
-        std::is_same<WeightT, uint8_t>::value || std::is_same<WeightT, cutlass::uint4b_t>::value ||
-        std::is_same<WeightT, cutlass::fp4_t>::value || std::is_same<WeightT, cutlass::nf4_t>::value;
     num_active_experts = num_active_experts_;
     fc1_expert_weights = intermediate_dst_;
     fc2_expert_weights = output_dst_;
@@ -213,9 +210,10 @@ FetcherContext<ActT, WeightT, BiasT>::FetcherContext(FetchType mode,
     is_allocate_buffer_(false)
 {
     // create cuda stream
+    FT_LOG_DEBUG(__PRETTY_FUNCTION__);
     check_cuda_error(cudaStreamCreate(&this->stream));
     weight_size_per_expert_ = intermediate_w_size_per_expert_ + output_w_size_per_expert_ + intermediate_scale_size_per_expert_ + output_scale_size_per_expert_;
-    if (intermediate_scale_size_per_expert_ != 0) {
+    if (scales_required) {
         GroupedMemoryArena::instance().initIfUninit(arena_size, {
             intermediate_w_size_per_expert_,
             output_w_size_per_expert_,
@@ -246,13 +244,15 @@ void FetcherContext<ActT, WeightT, BiasT>::allocateBuffer(IAllocator* allocator,
     intermediate_dst_ = (WeightT*)allocator_->reMalloc(intermediate_dst_, intermediate_w_size_per_expert_ * num_experts_);
     output_dst_ = (WeightT*)allocator_->reMalloc(output_dst_, output_w_size_per_expert_ * num_experts_);
     intermediate_bias_dst_ = (BiasT*)allocator_->reMalloc(intermediate_bias_dst_, intermediate_b_size_per_expert_ * num_experts_);
-    intermediate_scale_dst_ = (ActT*)allocator_->reMalloc(intermediate_scale_dst_, intermediate_scale_size_per_expert_ * num_experts_);
-    output_scale_dst_ = (ActT*)allocator_->reMalloc(output_scale_dst_, output_scale_size_per_expert_ * num_experts_);
     intermediate_working_ = (WeightT*)allocator_->reMalloc(intermediate_working_, intermediate_w_size_per_expert_ * num_experts_);
     output_working_ = (WeightT*)allocator_->reMalloc(output_working_, output_w_size_per_expert_ * num_experts_);
     intermediate_bias_working_ = (BiasT*)allocator_->reMalloc(intermediate_bias_working_, intermediate_b_size_per_expert_ * num_experts_);
-    intermediate_scale_working_ = (ActT*)allocator_->reMalloc(intermediate_scale_working_, intermediate_scale_size_per_expert_ * num_experts_);
-    output_scale_working_ = (ActT*)allocator_->reMalloc(output_scale_working_, output_scale_size_per_expert_ * num_experts_);
+    if (scales_required) {
+        intermediate_scale_dst_ = (ActT*)allocator_->reMalloc(intermediate_scale_dst_, intermediate_scale_size_per_expert_ * num_experts_);
+        output_scale_dst_ = (ActT*)allocator_->reMalloc(output_scale_dst_, output_scale_size_per_expert_ * num_experts_);
+        intermediate_scale_working_ = (ActT*)allocator_->reMalloc(intermediate_scale_working_, intermediate_scale_size_per_expert_ * num_experts_);
+        output_scale_working_ = (ActT*)allocator_->reMalloc(output_scale_working_, output_scale_size_per_expert_ * num_experts_);
+    }
 
     permuted_experts_ = (int*)allocator_->reMalloc(permuted_experts_, sizeof(int) * num_rows, false, true);
 
@@ -269,13 +269,15 @@ void FetcherContext<ActT, WeightT, BiasT>::freeBuffer()
         allocator_->free((void**)&intermediate_dst_);
         allocator_->free((void**)&output_dst_);
         allocator_->free((void**)&intermediate_bias_dst_);
-        allocator_->free((void**)&intermediate_scale_dst_);
-        allocator_->free((void**)&output_scale_dst_);
         allocator_->free((void**)&intermediate_working_);
         allocator_->free((void**)&output_working_);
         allocator_->free((void**)&intermediate_bias_working_);
-        allocator_->free((void**)&intermediate_scale_working_);
-        allocator_->free((void**)&output_scale_working_);
+        if (scales_required) {
+            allocator_->free((void**)&intermediate_scale_dst_);
+            allocator_->free((void**)&output_scale_dst_);
+            allocator_->free((void**)&intermediate_scale_working_);
+            allocator_->free((void**)&output_scale_working_);
+        }
 
         allocator_->free((void**)&permuted_experts_, true);
 

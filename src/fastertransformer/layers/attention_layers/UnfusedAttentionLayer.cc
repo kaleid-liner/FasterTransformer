@@ -136,8 +136,6 @@ void UnfusedAttentionLayer<T>::forward(TensorMap*                output_tensors,
     }
 #endif
     check_cuda_error(cudaStreamSynchronize(stream_));
-    saveToBinary(q_buf_, request_batch_size * request_seq_len * hidden_units_, "/data/debug/q_buf.bin");
-    saveToBinary(k_buf_, request_batch_size * request_seq_len * hidden_units_, "/data/debug/k_buf.bin");
 
     if (padding_offset == nullptr) {
         invokeAddQKVBiasIA3Transpose(q_buf_2_,
@@ -193,8 +191,6 @@ void UnfusedAttentionLayer<T>::forward(TensorMap*                output_tensors,
     float scalar = 1 / (sqrtf(size_per_head_ * 1.0f) * q_scaling_);
 
     check_cuda_error(cudaStreamSynchronize(stream_));
-    saveToBinary(q_buf_2_, request_batch_size * request_seq_len * hidden_units_, "/data/debug/q_buf_2.bin");
-    saveToBinary(k_buf_2_, request_batch_size * request_seq_len * hidden_units_, "/data/debug/k_buf_2.bin");
 
     cublas_wrapper_->stridedBatchedGemm(CUBLAS_OP_T,
                                         CUBLAS_OP_N,
@@ -214,14 +210,12 @@ void UnfusedAttentionLayer<T>::forward(TensorMap*                output_tensors,
                                         scalar);
 
     // TODO (fuse with softMax)
-    saveToBinary(qk_buf_, request_batch_size * head_num_ * request_seq_len * request_seq_len, "/data/debug/qk_buf.bin");
     if (use_relative_position_bias) {
         invokeAddRelativeAttentionBias(
             qk_buf_, relative_attention_bias, request_batch_size, head_num_, request_seq_len, stream_);
     }
 
     check_cuda_error(cudaStreamSynchronize(stream_));
-    saveToBinary(qk_buf_, request_batch_size * head_num_ * request_seq_len * request_seq_len, "/data/debug/qk_buf_add_rab.bin");
 
     MaskedSoftmaxParam<T, T> param;
     param.attention_score    = qk_buf_;         // (batch_size, head_num, q_length, k_length)

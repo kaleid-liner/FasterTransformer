@@ -636,7 +636,6 @@ void FfnLayer<T>::freeBuffer()
 
         is_allocate_buffer_ = false;
     }
-    FT_LOG_TRACE(" __PRETTY_FUNCTION__ free");
 }
 
 #define INVOKE_GENERIC_ACT(ACT)                                                                                        \

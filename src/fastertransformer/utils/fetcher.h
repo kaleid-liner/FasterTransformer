@@ -29,20 +29,19 @@ template<class ActT, class WeightT = ActT, class BiasT = ActT>
 class FetcherContext {
     // TODO: Refactor naming
 private:
-    WeightT* intermediate_working_;          // on-GPU
-    WeightT* output_working_;                // on-GPU
-    BiasT*   intermediate_bias_working_;       // on-GPU
-    ActT*    intermediate_scale_working_;
-    ActT*    output_scale_working_;
+    WeightT* intermediate_working_       = nullptr;  // GPU
+    WeightT* output_working_             = nullptr;  // GPU
+    BiasT*   intermediate_bias_working_  = nullptr;  // GPU  
+    ActT*    intermediate_scale_working_ = nullptr;  // GPU
+    ActT*    output_scale_working_       = nullptr;  // GPU
 
-    WeightT* intermediate_dst_;        // on-GPU buffer
-    WeightT* output_dst_;              // on-GPU buffer
-    BiasT*   intermediate_bias_dst_;   // on-GPU buffer
-    ActT*    intermediate_scale_dst_;
-    ActT*    output_scale_dst_;
+    WeightT* intermediate_dst_           = nullptr;  // GPU 
+    WeightT* output_dst_                 = nullptr;  // GPU 
+    BiasT*   intermediate_bias_dst_      = nullptr;  // GPU 
+    ActT*    intermediate_scale_dst_     = nullptr;  // GPU 
+    ActT*    output_scale_dst_           = nullptr;  // GPU 
 
-    int* row_expert_sorting_buffer;         // on-CPU
-    int* expert_sparse_idx_cpu;             // on-CPU
+    int*  permuted_experts_              = nullptr;  // CPU
 
     size_t intermediate_w_size_per_expert_;
     size_t output_w_size_per_expert_;
@@ -63,8 +62,6 @@ private:
 
     const char* next_weight_src_;
     const char* current_weight_src_;
-
-    int*  permuted_experts_; // CPU
 
     int num_active_experts_;
 
@@ -114,6 +111,11 @@ public:
     void freeBuffer();
     
     using tag_t = typename GroupedMemoryArena::tag_t;
+
+    static constexpr bool scales_required =
+        std::is_same<WeightT, uint8_t>::value || std::is_same<WeightT, cutlass::uint4b_t>::value ||
+        std::is_same<WeightT, cutlass::fp4_t>::value || std::is_same<WeightT, cutlass::nf4_t>::value;
+
 };
 
 

@@ -788,9 +788,6 @@ void T5Decoding<T>::forward(TensorMap*                 output_tensors,
                 decoder_input_tensors.push_back(input_tensors->at("ia3_tasks").slice({local_batch_size}, id_offset));
             }
 
-            // loadWeightFromBin(decoder_input_tensors.at(0).getPtr<T>(), {decoder_input_tensors.at(0).size()}, "/data/debug/inputs_embeds.bin", FtCudaDataType::FP32);
-            // loadWeightFromBin(decoder_input_tensors.at(1).getPtr<T>(), {decoder_input_tensors.at(1).size()}, "/data/debug/hf_encoder_hidden_states.bin", FtCudaDataType::FP32);
-
             std::vector<Tensor> decoder_output_tensors{
                 Tensor{MEMORY_GPU,
                        data_type,
