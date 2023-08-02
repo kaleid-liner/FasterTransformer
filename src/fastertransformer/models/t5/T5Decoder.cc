@@ -422,8 +422,8 @@ void T5Decoder<T>::forward(std::vector<Tensor>*                         output_t
         }
 
         bool use_moe = std::find(moe_layer_index_.begin(), moe_layer_index_.end(), l) != moe_layer_index_.end();
-        if (use_moe && GlobalConfig::instance().profiling) {
-            Profiling::instance().insert(stream_, EventType::BLOCK_START);
+        if (GlobalConfig::instance().profiling) {
+            Profiling::instance().insert(stream_, use_moe ? EventType::BLOCK_START : EventType::NON_MOE_BLOCK_START);
         }
 
         FT_LOG_TRACE("==== milestone decoder 910 layer %d", l);
@@ -672,8 +672,8 @@ void T5Decoder<T>::forward(std::vector<Tensor>*                         output_t
                        stream_);
         }
 
-        if (use_moe && GlobalConfig::instance().profiling) {
-            Profiling::instance().insert(stream_, EventType::BLOCK_END);
+        if (GlobalConfig::instance().profiling) {
+            Profiling::instance().insert(stream_, use_moe ? EventType::BLOCK_END : EventType::NON_MOE_BLOCK_END);
         }
     }
 

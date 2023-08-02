@@ -18,32 +18,23 @@ void clearEvents(std::vector<cudaEvent_t>& events)
 
 namespace fastertransformer {
 
+const std::vector<std::string> Profiling::event_names_{
+    "NMB_S",
+    "NMB_E",
+    "BLK_S",
+    "BLK_E",
+    "MEM_S",
+    "MEM_E",
+    "CMP_S",
+    "CMP_E"
+};
+
 void Profiling::insert(cudaStream_t stream, EventType type)
 {
     cudaEvent_t event;
     cudaEventCreate(&event);
     cudaEventRecord(event, stream);
-    switch (type)
-    {
-        case EventType::COMP_START:
-            comp_start_events_.push_back(event);
-            break;
-        case EventType::COMP_END:
-            comp_end_events_.push_back(event);
-            break;
-        case EventType::MEM_START:
-            mem_start_events_.push_back(event);
-            break;
-        case EventType::MEM_END:
-            mem_end_events_.push_back(event);
-            break;
-        case EventType::BLOCK_START:
-            block_start_events_.push_back(event);
-            break;
-        case EventType::BLOCK_END:
-            block_end_events_.push_back(event);
-            break;
-    }
+    events_[(int)type].push_back(event);
 }
 
 Profiling::~Profiling()
@@ -53,48 +44,43 @@ Profiling::~Profiling()
 
 void Profiling::reset()
 {
-    clearEvents(comp_start_events_);
-    clearEvents(comp_end_events_);
-    clearEvents(mem_start_events_);
-    clearEvents(mem_end_events_);
-    clearEvents(block_start_events_);
-    clearEvents(block_end_events_);
+    for (auto& events: events_) {
+        clearEvents(events);
+    }
     cache_hit_rate_.reset();
 }
 
 void Profiling::report() const
 {
-    FT_CHECK(comp_start_events_.size() == comp_end_events_.size());
-    FT_CHECK(mem_start_events_.size() == mem_end_events_.size());
-    FT_CHECK(block_start_events_.size() == block_end_events_.size());
-
     float ms;
     AverageMeter<float> comp_lats, mem_lats, block_lats;
 
-    std::cout << "Total events num:"
-              << " (comp)" << comp_start_events_.size()
-              << " (mem)" << mem_start_events_.size()
-              << std::endl;
-
-    for (int i = 0; i < comp_start_events_.size(); i++) {
-        cudaEventElapsedTime(&ms, comp_start_events_[i], comp_end_events_[i]);
-        comp_lats.update(ms);
+    std::cout << "Total events num:";
+    for (int i = 0; i < NUM_EVENT_TYPE; i += 2) {
+        FT_CHECK(events_[i].size() == events_[i + 1].size());
+        std::cout << " (" << event_names_[i].substr(0, 3) << ")" << events_[i].size();
     }
-    std::cout << "Comp avg lats: " << comp_lats.getAvg() << " ms" << std::endl;
+    std::cout << std::endl;
 
-    for (int i = 0; i < mem_start_events_.size(); i++) {
-        cudaEventElapsedTime(&ms, mem_start_events_[i], mem_end_events_[i]);
-        mem_lats.update(ms);
+    for (int i = 0; i < NUM_EVENT_TYPE; i += 2) {
+        AverageMeter<float> avg_lats;
+        for (int j = 0; j < events_[i].size(); j++) {
+            cudaEventElapsedTime(&ms, events_[i][j], events_[i + 1][j]);
+            avg_lats.update(ms);
+        }
+        std::cout << event_names_[i].substr(0, 3) << " AVG: " << avg_lats.getAvg() << " ms" << std::endl;
     }
-    std::cout << "Mem avg lats: " << mem_lats.getAvg() << " ms" << std::endl;
-
-    for (int i = 0; i < block_start_events_.size(); i++) {
-        cudaEventElapsedTime(&ms, block_start_events_[i], block_end_events_[i]);
-        block_lats.update(ms);
-    }
-    std::cout << "Block avg lats: " << block_lats.getAvg() << " ms" << std::endl;
 
     std::cout << "Average cache hit rate: " << cache_hit_rate_.getAvg() << std::endl;
+
+    std::cout << "Timeline:" << std::endl;
+
+    for (int i = 0; i < events_[0].size(); i++) {
+        for (int j = 0; j < NUM_EVENT_TYPE; j++) {
+            cudaEventElapsedTime(&ms, events_[0][0], events_[j][i]);
+            std::cout << event_names_[j] << "#" << i << ms << " ms" << std::endl;
+        }
+    }
 }
 
 } // namespace fastertransformer

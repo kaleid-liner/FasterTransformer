@@ -8,12 +8,14 @@ namespace fastertransformer {
 
 enum class EventType
 {
-    COMP_START,
-    COMP_END,
+    NON_MOE_BLOCK_START,
+    NON_MOE_BLOCK_END,
+    BLOCK_START,
+    BLOCK_END,
     MEM_START,
     MEM_END,
-    BLOCK_START,
-    BLOCK_END
+    COMP_START,
+    COMP_END
 };
 
 class Profiling
@@ -39,14 +41,16 @@ public:
     }
 
 private:
-    std::vector<cudaEvent_t> comp_start_events_;
-    std::vector<cudaEvent_t> comp_end_events_;
-    std::vector<cudaEvent_t> mem_start_events_;
-    std::vector<cudaEvent_t> mem_end_events_;
-    std::vector<cudaEvent_t> block_start_events_;
-    std::vector<cudaEvent_t> block_end_events_;
+    static constexpr int NUM_EVENT_TYPE = (int)EventType::COMP_END + 1;
+
+    std::vector<std::vector<cudaEvent_t>> events_;
+    static const std::vector<std::string> event_names_;
     
     AverageMeter<double> cache_hit_rate_;
+
+    Profiling() {
+        events_.resize(NUM_EVENT_TYPE);
+    }
 };
 
 } // namespace fastertransformer
