@@ -1078,7 +1078,7 @@ void T5Decoding<T>::forward(TensorMap*                 output_tensors,
 
 
     if (GlobalConfig::instance().profiling) {
-        Profiling::instance().report();
+        Profiling::instance().report(GlobalConfig::instance().detailed_timing);
     }
 }
 

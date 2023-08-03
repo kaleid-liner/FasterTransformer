@@ -27,7 +27,7 @@ public:
 
     ~Profiling();
 
-    void report() const;
+    void report(bool detailed_timing) const;
 
     static Profiling& instance()
     {

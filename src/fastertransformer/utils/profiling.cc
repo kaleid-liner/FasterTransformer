@@ -50,7 +50,7 @@ void Profiling::reset()
     cache_hit_rate_.reset();
 }
 
-void Profiling::report() const
+void Profiling::report(bool detailed_timing) const
 {
     float ms;
     AverageMeter<float> comp_lats, mem_lats, block_lats;
@@ -73,12 +73,14 @@ void Profiling::report() const
 
     std::cout << "Average cache hit rate: " << cache_hit_rate_.getAvg() << std::endl;
 
-    std::cout << "Timeline:" << std::endl;
+    if (detailed_timing) {
+        std::cout << "Timeline:" << std::endl;
 
-    for (int i = 0; i < events_[0].size(); i++) {
-        for (int j = 0; j < NUM_EVENT_TYPE; j++) {
-            cudaEventElapsedTime(&ms, events_[0][0], events_[j][i]);
-            std::cout << event_names_[j] << "#" << i << ms << " ms" << std::endl;
+        for (int i = 0; i < events_[0].size(); i++) {
+            for (int j = 0; j < NUM_EVENT_TYPE; j++) {
+                cudaEventElapsedTime(&ms, events_[0][0], events_[j][i]);
+                std::cout << event_names_[j] << "#" << i << ms << " ms" << std::endl;
+            }
         }
     }
 }

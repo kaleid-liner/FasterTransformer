@@ -50,6 +50,7 @@ public:
         decoder_fetcher_mode = static_cast<FetchType>(std::stoi(ini["default"]["decoder_fetcher_mode"]));
 
         profiling = std::stoi(ini["default"]["profiling"]);
+        detailed_timing = std::stoi(ini["default"]["detailed_timing"]);
 
         offload_path = ini["default"]["offload_path"];
         disk_offload = std::stoi(ini["default"]["disk_offload"]);
@@ -74,6 +75,7 @@ public:
                   << "encoder_fetcher_mode: " << int(encoder_fetcher_mode) << std::endl
                   << "decoder_fetcher_mode: " << int(decoder_fetcher_mode) << std::endl
                   << "profiling: " << profiling << std::endl
+                  << "detailed_timing: " << detailed_timing << std::endl
                   << "offload_path: " << offload_path << std::endl
                   << "disk_offload: " << disk_offload << std::endl
                   << "load_from_cpp: " << load_from_cpp << std::endl
@@ -91,6 +93,7 @@ public:
     FetchType decoder_fetcher_mode;
 
     bool profiling;
+    bool detailed_timing;
 
     std::string offload_path;
     bool disk_offload;

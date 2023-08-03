@@ -10,7 +10,7 @@ import torch
 def parse_output(output: str):
     block_lat = 0
     for line in reversed(output.splitlines()):
-        m = re.search(r"Block avg lats: ([\d\.]+) ms", line)
+        m = re.search(r"BLK AVG: ([\d\.]+) ms", line)
         if m:
             block_lat = float(m[1])
             break
@@ -27,10 +27,12 @@ def parse_output(output: str):
 
 def main():
     models = [
+        "switch-base-8",
         "switch-base-16",
         "switch-base-32",
         "switch-base-64",
         "switch-base-128",
+        "switch-base-256",
         "switch-large-128",
     ]
     batch_sizes = [
@@ -63,7 +65,8 @@ def main():
 
             for batch_size in batch_sizes:
                 iterations = 4
-                print("Running {} {} {}".format(model, method, batch_size))
+                exp_name = f"{model}_{method}_{batch_size}"
+                print(f"Running {exp_name}")
                 if method == "GPU-only":
                     encoder_fetcher_mode = "0"
                     decoder_fetcher_mode = "0"
@@ -83,6 +86,7 @@ def main():
                     "encoder_fetcher_mode": encoder_fetcher_mode,
                     "decoder_fetcher_mode": decoder_fetcher_mode,
                     "profiling": "1",
+                    "detailed_timing": "0",
                     "offload_path": "/data/ft/{}/".format(model),
                     "disk_offload": "0",
                     "load_from_cpp": "1",
@@ -121,7 +125,11 @@ def main():
                     cwd="/workspace/FasterTransformer/build"
                 )
 
+                with open(f"/workspace/FasterTransformer/logs/{exp_name}.log", "w") as fp:
+                    fp.write(result.stdout)
+
                 block_lat, throughput = parse_output(result.stdout)
+                print(f"BLK AVG: {block_lat} ms, throughput: {throughput} tokens/sec")
                 _block_lats.append(block_lat)
                 _throughputs.append(throughput)
 
