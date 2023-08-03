@@ -57,6 +57,7 @@ void T5Decoder<T>::initialize()
 
     bool use_gated_activation = activation_type_ == ActivationType::GeGLU || activation_type_ == ActivationType::ReGLU
                                 || activation_type_ == ActivationType::SiGLU;
+    int quant_mode = (int)GlobalConfig::instance().quant_mode;
     if (activation_type_ == ActivationType::Gelu || activation_type_ == ActivationType::GeGLU) {
         ffn_layer_ = new TensorParallelGeluFfnLayer<T>(max_batch_size_,
                                                        1,
@@ -71,7 +72,7 @@ void T5Decoder<T>::initialize()
                                                        true,
                                                        is_free_buffer_after_forward_,
                                                        false,
-                                                       0,
+                                                       quant_mode,
                                                        use_gated_activation,
                                                        custom_all_reduce_comm_,
                                                        enable_custom_all_reduce_);
@@ -90,7 +91,7 @@ void T5Decoder<T>::initialize()
                                                        true,
                                                        is_free_buffer_after_forward_,
                                                        false,
-                                                       0,
+                                                       quant_mode,
                                                        use_gated_activation,
                                                        custom_all_reduce_comm_,
                                                        enable_custom_all_reduce_);

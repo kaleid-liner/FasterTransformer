@@ -710,26 +710,6 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
     static constexpr bool scales_required =
         std::is_same<WeightType, uint8_t>::value || std::is_same<WeightType, cutlass::uint4b_t>::value ||
         std::is_same<WeightType, cutlass::fp4_t>::value || std::is_same<WeightType, cutlass::nf4_t>::value;
-    if (scales_required) {
-        if (fc1_scales == nullptr) {
-            throw std::runtime_error(
-                "[FT Error][Run MoE FC] Scales expected but scale for first matmul is a null pointer");
-        }
-        else if (fc2_scales == nullptr) {
-            throw std::runtime_error(
-                "[FT Error][Run MoE FC] Scales expected but scale for second matmul is a null pointer");
-        }
-    }
-    else {
-        if (fc1_scales != nullptr) {
-            throw std::runtime_error(
-                "[FT Error][Run MoE FC] Scales are ignored for fp32/fp16/bf16 but received scale for FC1");
-        }
-        else if (fc2_scales != nullptr) {
-            throw std::runtime_error(
-                "[FT Error][Run MoE FC] Scales are ignored for fp32/fp16/bf16 but received scale for FC2");
-        }
-    }
 
     configure_ws_ptrs(workspace_ptr, num_rows, hidden_size, inter_size, num_experts, k);
 
@@ -845,6 +825,27 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
                                           fc1_expert_biases, 
                                           fc1_scales,
                                           fc2_scales);
+        }
+    }
+
+    if (scales_required) {
+        if (fc1_scales == nullptr) {
+            throw std::runtime_error(
+                "[FT Error][Run MoE FC] Scales expected but scale for first matmul is a null pointer");
+        }
+        else if (fc2_scales == nullptr) {
+            throw std::runtime_error(
+                "[FT Error][Run MoE FC] Scales expected but scale for second matmul is a null pointer");
+        }
+    }
+    else {
+        if (fc1_scales != nullptr) {
+            throw std::runtime_error(
+                "[FT Error][Run MoE FC] Scales are ignored for fp32/fp16/bf16 but received scale for FC1");
+        }
+        else if (fc2_scales != nullptr) {
+            throw std::runtime_error(
+                "[FT Error][Run MoE FC] Scales are ignored for fp32/fp16/bf16 but received scale for FC2");
         }
     }
 

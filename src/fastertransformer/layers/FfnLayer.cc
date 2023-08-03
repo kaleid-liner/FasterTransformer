@@ -171,12 +171,6 @@ void FfnLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_tensors, c
             FT_CHECK_WITH_INFO(moe_int8_weight_only_fc_runner_.get() != NULL,
                                "weight only runner was not initialized.");
 
-            FT_CHECK(ffn_weights->intermediate_weight.int8_kernel != NULL
-                     && ffn_weights->intermediate_weight.weight_only_quant_scale != NULL);
-
-            FT_CHECK(ffn_weights->output_weight.int8_kernel != NULL
-                     && ffn_weights->output_weight.weight_only_quant_scale != NULL);
-
             moe_int8_weight_only_fc_runner_->run_moe_fc(
                 input_tensor,
                 moe_gates_buf_,
