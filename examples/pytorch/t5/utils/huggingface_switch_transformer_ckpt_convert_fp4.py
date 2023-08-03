@@ -26,10 +26,16 @@ import re
 dir_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(dir_path + "/../../../../3rdparty/transformers/src/")
 
-from transformers import SwitchTransformersForConditionalGeneration, SwitchTransformersEncoderModel
+from transformers import SwitchTransformersForConditionalGeneration, SwitchTransformersEncoderModel, AutoConfig, SwitchTransformersPreTrainedModel
 
 import numpy as np
 import torch  # pytype: disable=import-error
+
+def mock_random_weight(*args, **kwargs):
+    pass
+
+torch.nn.init.kaiming_normal_ = mock_random_weight
+torch.nn.init.kaiming_uniform_ = mock_random_weight
 
 LOGGER = logging.getLogger(__name__)
 
@@ -66,7 +72,15 @@ def fuse_decoder_qkv(model, factor, saved_dir, np_weight_data_type):
         for j in range(factor):
             saved_path = saved_dir / f"decoder.block.{i}.layer.0.SelfAttention.qkv.weight.{j}.bin"
             split_vals[j].tofile(saved_path.as_posix())
-        
+
+
+# TODO: replace with real quantization
+def quantize(param):
+    # WI, WO, WI_SCALE, WO_SCALE
+    out_feature, in_feature = param.shape
+    weight_size = (in_feature * out_feature + out_feature * in_feature) // 2 + (out_feature + in_feature) * 2
+    return np.ones((1, weight_size), dtype=np.int8)
+
 
 def fuse_expert(model, factor, saved_dir, np_weight_data_type):
     model_dict = {}
@@ -76,10 +90,7 @@ def fuse_expert(model, factor, saved_dir, np_weight_data_type):
 
     for name, param in model.named_parameters():
         if name.find("mlp") != -1 and name.find("wi") != -1:
-            wo_name = name.replace("wi", "wo")
-            all_weight = torch.cat([torch.flatten(param.T),
-                                    torch.flatten(model_dict[wo_name].T)])
-            all_weight = all_weight.cpu().detach().numpy().astype(np_weight_data_type)
+            all_weight = quantize(param)
 
             split_vals = np.split(all_weight, factor, axis=-1)
 
@@ -122,26 +133,23 @@ def split_and_convert_process(key, val, factor, saved_dir):
     elif (
             key.find("SelfAttention.o.weight") != -1
             or key.find("EncDecAttention.o.weight") != -1
-            or key.find("DenseReluDense.wo.weight") != -1
-            or re.search(r"mlp.experts.expert_\d+.wo.weight", key) is not None
     ):
         split_vals = np.split(val, factor, axis=0)
         for j in range(factor):
             saved_path = saved_dir / f"{saved_key}.{j:d}.bin"
             split_vals[j].tofile(saved_path.as_posix())
 
-    elif (
-            key.find("DenseReluDense.wi.weight") != -1
-            or re.search(r"mlp.experts.expert_\d+.wi.weight", key) is not None
-            or (key.find("encoder") != -1 and (
-            key.find("SelfAttention.q.weight") != -1
-            or key.find("SelfAttention.k.weight") != -1
-            or key.find("SelfAttention.v.weight") != -1
-    )
+    elif ((
+            key.find("encoder") != -1 and (
+                key.find("SelfAttention.q.weight") != -1
+                or key.find("SelfAttention.k.weight") != -1
+                or key.find("SelfAttention.v.weight") != -1
             )
+        )
             or key.find("EncDecAttention.q.weight") != -1
             or key.find("EncDecAttention.k.weight") != -1
             or key.find("EncDecAttention.v.weight") != -1
+            or key.find("mlp.router.classifier.weight") != -1
     ):
         split_vals = np.split(val, factor, axis=-1)
         for j in range(factor):
@@ -174,6 +182,15 @@ def split_and_convert_process(key, val, factor, saved_dir):
             )
     ):
         pass
+    elif (
+            key.find("DenseReluDense.wo.weight") != -1
+            or key.find("DenseReluDense.wi.weight") != -1
+            or key.find("mlp.wi.weight") != -1
+            or key.find("mlp.wo.weight") != -1
+            or re.search(r"mlp.experts.expert_\d+.wo.weight", key) is not None
+            or re.search(r"mlp.experts.expert_\d+.wi.weight", key) is not None
+    ):
+        pass
     elif key.find("encoder.embed_tokens.weight") != -1 or \
             key.find("decoder.embed_tokens.weight") != -1:
         LOGGER.warning(f"Not save {key}, using shared.weight directly.")
@@ -188,7 +205,13 @@ def convert_checkpoint(args):
     if args.encoder_only:
         model = SwitchTransformersEncoderModel.from_pretrained(args.in_file)
     else:
-        model = SwitchTransformersForConditionalGeneration.from_pretrained(args.in_file)
+        if args.random_weight:
+            cfg = AutoConfig.from_pretrained(args.in_file)
+            SwitchTransformersForConditionalGeneration._init_weights = mock_random_weight
+            SwitchTransformersPreTrainedModel._init_weights = mock_random_weight
+            model = SwitchTransformersForConditionalGeneration(cfg)
+        else:
+            model = SwitchTransformersForConditionalGeneration.from_pretrained(args.in_file)
 
     config = configparser.ConfigParser()
 
@@ -249,6 +272,7 @@ if __name__ == "__main__":
     parser.add_argument("-weight_data_type", type=str, default="fp32", choices=["fp32", "fp16"])
     parser.add_argument("--encoder_only", "-e", action="store_true")
     parser.add_argument("--verbose", action="store_true", help="Provide verbose messages")
+    parser.add_argument("--random_weight", action="store_true")
     args = parser.parse_args()
     log_format = "%(asctime)s %(name)s [%(levelname)s] %(message)s"
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format=log_format)
