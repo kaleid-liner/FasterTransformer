@@ -1,5 +1,3 @@
-#python /workspace/FasterTransformer/examples/pytorch/t5/utils/huggingface_switch_transformer_ckpt_convert.py -saved_dir /data/ft/switch-base-128-orig -in_file /data/b128-squad-orig -inference_tensor_para_size 1
-
 for model in switch-base-8 switch-base-16 switch-base-32 switch-base-64 switch-base-128 switch-base-256 switch-large-128
 do
     echo $model
