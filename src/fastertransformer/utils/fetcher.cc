@@ -68,12 +68,10 @@ void FetcherContext<ActT, WeightT, BiasT>::fetch(const int* permuted_experts, bo
         return;
     }
 
-    check_cuda_error(cudaMemcpyAsync(permuted_experts_,
-                                     permuted_experts,
-                                     sizeof(int) * num_rows_,
-                                     cudaMemcpyDeviceToHost,
-                                     stream));
-    cudaStreamSynchronize(stream);
+    check_cuda_error(cudaMemcpy(permuted_experts_,
+                                permuted_experts,
+                                sizeof(int) * num_rows_,
+                                cudaMemcpyDeviceToHost));
 
     auto new_end = std::unique(permuted_experts_, permuted_experts_ + num_rows_);
     num_active_experts_ = new_end - permuted_experts_;
