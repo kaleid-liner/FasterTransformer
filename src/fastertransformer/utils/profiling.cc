@@ -79,7 +79,7 @@ void Profiling::report(bool detailed_timing) const
         for (int i = 0; i < events_[0].size(); i++) {
             for (int j = 0; j < NUM_EVENT_TYPE; j++) {
                 cudaEventElapsedTime(&ms, events_[0][0], events_[j][i]);
-                std::cout << event_names_[j] << "#" << i << ms << " ms" << std::endl;
+                std::cout << event_names_[j] << "#" << i << " " << ms << " ms" << std::endl;
             }
         }
     }
