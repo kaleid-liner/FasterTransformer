@@ -5,6 +5,7 @@ import re
 from cpuinfo import get_cpu_info
 import psutil
 import torch
+import argparse
 
 
 def parse_output(output: str):
@@ -25,7 +26,85 @@ def parse_output(output: str):
     return block_lat, throughput
 
 
+def profile_config(cpp_config, model, method, batch_size):
+    iterations = 4
+    exp_name = f"{model}_{method}_{batch_size}"
+    print(f"Running {exp_name}")
+    if method == "GPU-only":
+        encoder_fetcher_mode = "0"
+        decoder_fetcher_mode = "0"
+    elif method == "Pre-gated":
+        encoder_fetcher_mode = "1"
+        decoder_fetcher_mode = "2"
+    elif method == "DeepSpeed":
+        encoder_fetcher_mode = "1"
+        decoder_fetcher_mode = "1"
+    elif method == "SE-MoE":
+        encoder_fetcher_mode = "1"
+        decoder_fetcher_mode = "2"
+        iterations = 1
+
+    cpp_config["default"] = {
+        "arena_size": "21474836480",
+        "encoder_fetcher_mode": encoder_fetcher_mode,
+        "decoder_fetcher_mode": decoder_fetcher_mode,
+        "profiling": "1",
+        "detailed_timing": "0",
+        "offload_path": "/data/ft/{}/".format(model),
+        "disk_offload": "0",
+        "load_from_cpp": "1",
+        "use_cache": "0",
+        "quant_mode": "0",
+        "vocab_size": "32128",
+        "fetch_all": str(int(method == "SE-MoE")),
+        "forced_num_experts": "0",
+    }
+
+    with open("/workspace/FasterTransformer/cpp_config.ini", "w") as fp:
+        cpp_config.write(fp)
+
+    command = (
+        f"python /workspace/FasterTransformer/examples/pytorch/t5/perf_benchmark.py "
+        f"--batch_size {batch_size} "
+        f"--beam_width 4 "
+        f"--seq_len 256 "
+        f"--data_type fp32 "
+        f"--test_time 3 "
+        f"--sampling_topk 1 "
+        f"--model_type Megatron-DeepSpeed "
+        f"--ckpt_path /data/ft/{model}/ "
+        f"--model t5-base "
+        f"--duration 0 "
+        f"--iterations {iterations} "
+    )
+
+    print(command)
+
+    result = subprocess.run(
+        command,
+        shell=True,
+        capture_output=True,
+        text=True,
+        cwd="/workspace/FasterTransformer/build"
+    )
+
+    with open(f"/workspace/FasterTransformer/logs/{exp_name}.log", "w") as fp:
+        fp.write(result.stdout)
+
+    block_lat, throughput = parse_output(result.stdout)
+    print(f"BLK AVG: {block_lat} ms, throughput: {throughput} tokens/sec")
+    return block_lat, throughput
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--re_run", action="store_true")
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
+
     models = [
         "switch-base-8",
         "switch-base-16",
@@ -41,7 +120,6 @@ def main():
         4,
         8,
         16,
-        32,
     ]
     methods = ["GPU-only", "Pre-gated", "DeepSpeed", "SE-MoE"]
 
@@ -58,90 +136,60 @@ def main():
     block_lats.update(hardware_infos)
     throughputs.update(hardware_infos)
 
-    for method in methods:
-        for model in models:
-            _block_lats = []
-            _throughputs = []
+    if not args.re_run:
+        for method in methods:
+            for model in models:
+                _block_lats = []
+                _throughputs = []
 
-            for batch_size in batch_sizes:
-                iterations = 4
-                exp_name = f"{model}_{method}_{batch_size}"
-                print(f"Running {exp_name}")
-                if method == "GPU-only":
-                    encoder_fetcher_mode = "0"
-                    decoder_fetcher_mode = "0"
-                elif method == "Pre-gated":
-                    encoder_fetcher_mode = "1"
-                    decoder_fetcher_mode = "2"
-                elif method == "DeepSpeed":
-                    encoder_fetcher_mode = "1"
-                    decoder_fetcher_mode = "1"
-                elif method == "SE-MoE":
-                    encoder_fetcher_mode = "1"
-                    decoder_fetcher_mode = "2"
-                    iterations = 1
+                for batch_size in batch_sizes:
+                    block_lat, throughput = profile_config(cpp_config, model, method, batch_size)
+                    _block_lats.append(block_lat)
+                    _throughputs.append(throughput)
 
-                cpp_config["default"] = {
-                    "arena_size": "21474836480",
-                    "encoder_fetcher_mode": encoder_fetcher_mode,
-                    "decoder_fetcher_mode": decoder_fetcher_mode,
-                    "profiling": "1",
-                    "detailed_timing": "0",
-                    "offload_path": "/data/ft/{}/".format(model),
-                    "disk_offload": "0",
-                    "load_from_cpp": "1",
-                    "use_cache": "0",
-                    "quant_mode": "0",
-                    "vocab_size": "32128",
-                    "fetch_all": str(int(method == "SE-MoE")),
-                    "forced_num_experts": "0",
-                }
+                block_lats["{}/{}".format(model, method)] = _block_lats
+                throughputs["{}/{}".format(model, method)] = _throughputs
 
-                with open("/workspace/FasterTransformer/cpp_config.ini", "w") as fp:
-                    cpp_config.write(fp)
+                # Generate CSV after each model and method runned
+                df = pd.DataFrame.from_dict(block_lats)
+                df.to_csv("block_lats.csv", index=False)
 
-                command = (
-                    f"python /workspace/FasterTransformer/examples/pytorch/t5/perf_benchmark.py "
-                    f"--batch_size {batch_size} "
-                    f"--beam_width 4 "
-                    f"--seq_len 256 "
-                    f"--data_type fp32 "
-                    f"--test_time 3 "
-                    f"--sampling_topk 1 "
-                    f"--model_type Megatron-DeepSpeed "
-                    f"--ckpt_path /data/ft/{model}/ "
-                    f"--model t5-base "
-                    f"--duration 0 "
-                    f"--iterations {iterations} "
-                )
-
-                print(command)
-
-                result = subprocess.run(
-                    command,
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    cwd="/workspace/FasterTransformer/build"
-                )
-
-                with open(f"/workspace/FasterTransformer/logs/{exp_name}.log", "w") as fp:
-                    fp.write(result.stdout)
-
-                block_lat, throughput = parse_output(result.stdout)
-                print(f"BLK AVG: {block_lat} ms, throughput: {throughput} tokens/sec")
-                _block_lats.append(block_lat)
-                _throughputs.append(throughput)
-
-            block_lats["{}/{}".format(model, method)] = _block_lats
-            throughputs["{}/{}".format(model, method)] = _throughputs
-
-            # Generate CSV after each model and method runned
-            df = pd.DataFrame.from_dict(block_lats)
-            df.to_csv("block_lats.csv", index=False)
-
-            df = pd.DataFrame.from_dict(throughputs)
-            df.to_csv("throughputs.csv", index=False)
+                df = pd.DataFrame.from_dict(throughputs)
+                df.to_csv("throughputs.csv", index=False)
+    else:
+        block_lats_df = pd.read_csv("/workspace/FasterTransformer/performance_data/block_lats.csv")
+        throughputs_df = pd.read_csv("/workspace/FasterTransformer/performance_data/throughputs.csv")
+        models = [
+            "switch-base-8",
+            "switch-base-16",
+            "switch-base-32",
+            "switch-base-64",
+            "switch-base-128",
+            "switch-base-256",
+            "switch-large-128",
+        ]
+        batch_sizes = [
+            1,
+            2,
+            4,
+            8,
+            16,
+        ]
+        methods = ["Pre-gated", "DeepSpeed"]
+        rerun_configs = [
+            (model, method, batch_size)
+            for model in models
+            for method in methods
+            for batch_size in batch_sizes
+        ]
+        for model, method, batch_size in rerun_configs:
+            row_idx = batch_sizes.index(batch_size)
+            col_idx = "{}/{}".format(model, method)
+            block_lat, throughput = profile_config(cpp_config, model, method, batch_size)
+            block_lats_df.loc[row_idx, col_idx] = block_lat
+            throughputs_df.loc[row_idx, col_idx] = throughput
+            block_lats_df.to_csv("block_lats.csv", index=False)
+            throughputs_df.to_csv("throughputs.csv", index=False)
 
 
 if __name__ == "__main__":
