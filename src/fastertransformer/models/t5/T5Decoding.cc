@@ -70,6 +70,11 @@ void T5Decoding<T>::allocateBuffer(
     size_t batch_size, size_t beam_width, size_t max_seq_len, size_t max_mem_seq_len, size_t encoder_d_model)
 {
     FT_LOG_DEBUG(__PRETTY_FUNCTION__);
+    // Record memory usage before decoding allocation
+    if (GlobalConfig::instance().profiling) {
+        Profiling::instance().recordMemoryUsage();
+    }
+
     // Note: To put the start_ids, we use max_seq_len + 1 for ouptut_ids_buf_
     // And to consistent to the output_ids_buf_, some related buffers are also
     // use max_seq_len + 1, but not max_seq_len.
@@ -608,11 +613,12 @@ void T5Decoding<T>::forward(TensorMap*                 output_tensors,
     const size_t max_seq_len     = output_tensors->at("output_ids").shape[2];
     const size_t mem_max_seq_len = input_tensors->at("encoder_output").shape[1];
     const bool   has_ia3_tasks   = input_tensors->isExist("ia3_tasks");
-    allocateBuffer(batch_size, beam_width, max_seq_len, mem_max_seq_len, input_tensors->at("encoder_output").shape[2]);
 
     if (GlobalConfig::instance().profiling) {
         Profiling::instance().reset();
     }
+
+    allocateBuffer(batch_size, beam_width, max_seq_len, mem_max_seq_len, input_tensors->at("encoder_output").shape[2]);
 
     {
         TensorMap input_map(*input_tensors);

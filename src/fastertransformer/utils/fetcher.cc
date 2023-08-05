@@ -77,6 +77,10 @@ void FetcherContext<ActT, WeightT, BiasT>::fetch(const int* permuted_experts, bo
     num_active_experts_ = new_end - permuted_experts_;
 
     if (GlobalConfig::instance().profiling) {
+        Profiling::instance().activeExperts(num_active_experts_);
+    }
+
+    if (GlobalConfig::instance().profiling) {
         Profiling::instance().insert(stream, EventType::MEM_START);
     }
 
@@ -255,6 +259,10 @@ void FetcherContext<ActT, WeightT, BiasT>::allocateBuffer(IAllocator* allocator,
     permuted_experts_ = (int*)allocator_->reMalloc(permuted_experts_, sizeof(int) * num_rows, false, true);
 
     is_allocate_buffer_ = true;
+
+    if (GlobalConfig::instance().profiling) {
+        Profiling::instance().recordMemoryUsage();
+    }
 }
 
 

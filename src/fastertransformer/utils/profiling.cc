@@ -48,6 +48,8 @@ void Profiling::reset()
         clearEvents(events);
     }
     cache_hit_rate_.reset();
+    memory_usages_.clear();
+    max_num_active_experts_ = 0;
 }
 
 void Profiling::report(bool detailed_timing) const
@@ -83,6 +85,21 @@ void Profiling::report(bool detailed_timing) const
             }
         }
     }
+
+    std::cout << "MEM usage: ";
+    for (size_t used : memory_usages_) {
+        std::cout << used << " ";
+    }
+    std::cout << std::endl;
+
+    std::cout << "Max active experts: " << max_num_active_experts_ << std::endl;
+}
+
+void Profiling::recordMemoryUsage()
+{
+    size_t free, total;
+    cudaMemGetInfo(&free, &total);
+    memory_usages_.push_back(total - free);
 }
 
 } // namespace fastertransformer
