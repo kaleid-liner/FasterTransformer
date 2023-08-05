@@ -21,7 +21,7 @@ enum class QuantType {
 
 class GlobalConfig {
 public:
-    using quant_t = cutlass::uint4b_t;
+    using quant_t = cutlass::fp4_t;
 
     using weight_t = float;
 
