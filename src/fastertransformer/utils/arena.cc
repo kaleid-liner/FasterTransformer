@@ -36,7 +36,7 @@ std::future<void> MemoryArena<T>::allocate(const tag_t& tag, T* dst, const T* sr
                     cudaMemcpyHostToDevice, stream_));
         }
         if (post_callback == nullptr && dst != nullptr) {
-            invokeCudaD2DcpyConvert<float, float>((float*)dst, (const float*)repl.first, chunk_size_ * sizeof(T) / sizeof(float), stream_);
+            check_cuda_error(cudaMemcpyAsync(dst, repl.first, chunk_size_, cudaMemcpyDeviceToDevice, stream_));
         } else {
             post_callback(repl.first, stream_);
         }

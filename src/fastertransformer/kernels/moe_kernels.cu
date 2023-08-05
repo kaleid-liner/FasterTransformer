@@ -561,6 +561,33 @@ __global__ void compute_total_rows_before_expert_kernel(const int*    sorted_exp
     total_rows_before_expert[expert] = find_total_elts_leq_target(sorted_experts, sorted_experts_len, expert);
 }
 
+template<typename T>
+__global__ void unique_and_remove_zero_kernel(T* array, int arr_length)
+{
+    int start_idx;
+    // First, find non-zero element
+    for (start_idx = 0; start_idx < arr_length; ++start_idx) {
+        if (array[start_idx] != 0) break;
+    }
+
+    // Then, unique
+    T cur_val = 0;
+    int cur_idx = 0;
+    for (int i = start_idx; i < arr_length; ++i) {
+        if (array[i] != cur_val) {
+            cur_val = array[i];
+            array[cur_idx++] = cur_val;
+        }
+    }
+}
+
+template<typename T>
+void unique_and_remove_zero(T* array, int arr_length, cudaStream_t stream)
+{
+    FT_LOG_DEBUG(__PRETTY_FUNCTION__);
+    unique_and_remove_zero_kernel<<<1, 1, 0, stream>>>(array, arr_length);
+}
+
 template<typename T, typename WeightType, typename Enable>
 CutlassMoeFCRunner<T, WeightType, Enable>::CutlassMoeFCRunner()
 {
@@ -791,10 +818,8 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
 #endif 
 
     if (fetcher_context_) {
-        // Remove redundant experts
-        auto new_end = thrust::unique(thrust::device.on(stream), total_rows_before_expert_, total_rows_before_expert_ + num_experts);
-        // Remove leading zero
-        thrust::remove(thrust::device.on(stream), total_rows_before_expert_, new_end, 0);
+        // Remove redundant experts and leading zero
+        unique_and_remove_zero(total_rows_before_expert_, num_experts, stream);
 
         if (fetcher_context_->mode == FetchType::PREFETCH) {
             if (fetcher_context_->first_time) {

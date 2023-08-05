@@ -164,7 +164,7 @@ public:
         auto post_callback = [&tensor_sizes = tensor_sizes_, dsts = dsts](const char* cached_ptr, cudaStream_t stream) {
             const char* ptr = cached_ptr;
             for (int i = 0; i < dsts.size(); ++i) {
-                invokeCudaD2DcpyConvert<float, float>((float*)dsts[i], (float*)ptr, tensor_sizes[i] / sizeof(float), stream);
+                check_cuda_error(cudaMemcpyAsync(dsts[i], ptr, tensor_sizes[i], cudaMemcpyDeviceToDevice, stream));
                 ptr += tensor_sizes[i];
             }
         };
