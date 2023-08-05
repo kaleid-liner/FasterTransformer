@@ -79,7 +79,7 @@ def quantize(param):
     # WI, WO, WI_SCALE, WO_SCALE
     out_feature, in_feature = param.shape
     weight_size = (in_feature * out_feature + out_feature * in_feature) // 2 + (out_feature + in_feature) * 2
-    return np.ones((1, weight_size), dtype=np.int8)
+    return np.empty((1, weight_size), dtype=np.int8)
 
 
 def fuse_expert(model, factor, saved_dir, np_weight_data_type):
@@ -107,8 +107,8 @@ def fuse_expert(model, factor, saved_dir, np_weight_data_type):
 
 
 def split_and_convert_process(key, val, factor, saved_dir):
-    if val.ndim == 2:
-        val = val.transpose(1, 0)
+    # if val.ndim == 2:
+    #     val = val.transpose(1, 0)
     saved_key = key
     LOGGER.debug(f"key: {key}, val.shape: {val.shape}")
 
@@ -249,7 +249,7 @@ def convert_checkpoint(args):
 
     pool = multiprocessing.Pool(args.processes)
     pool.starmap_async(split_and_convert_process,
-                       [(name, param.cpu().detach().numpy().astype(np_weight_data_type), i_gpu_num, saved_dir)
+                       [(name, np.empty_like(param, dtype=np_weight_data_type), i_gpu_num, saved_dir)
                         for name, param in model.state_dict().items()])
 
     pool.close()
