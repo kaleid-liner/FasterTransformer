@@ -1,0 +1,4 @@
+bs,CPU,RAM (GB),GPU,switch-base-8/GPU-only,switch-base-8/Pre-gated,switch-base-8/DeepSpeed,switch-base-8/SE-MoE,switch-base-64/GPU-only,switch-base-64/Pre-gated,switch-base-64/DeepSpeed,switch-base-64/SE-MoE,switch-base-256/GPU-only,switch-base-256/Pre-gated,switch-base-256/DeepSpeed,switch-base-256/SE-MoE,switch-large-128/GPU-only,switch-large-128/Pre-gated,switch-large-128/DeepSpeed,switch-large-128/SE-MoE
+1,AMD EPYC 7V12 64-Core Processor,1771,NVIDIA A100-SXM4-80GB,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+8,AMD EPYC 7V12 64-Core Processor,1771,NVIDIA A100-SXM4-80GB,4,4,4,4,8,8,8,8,8,8,8,8,8,8,8,8
+16,AMD EPYC 7V12 64-Core Processor,1771,NVIDIA A100-SXM4-80GB,6,6,6,6,12,12,12,12,15,15,15,15,16,16,16,16
