@@ -50,6 +50,7 @@ void Profiling::reset()
     cache_hit_rate_.reset();
     memory_usages_.clear();
     max_num_active_experts_ = 0;
+    average_num_active_experts_.reset();
 }
 
 void Profiling::report(bool detailed_timing) const
@@ -93,6 +94,8 @@ void Profiling::report(bool detailed_timing) const
     std::cout << std::endl;
 
     std::cout << "Max active experts: " << max_num_active_experts_ << std::endl;
+
+    std::cout << "Average active experts: " << average_num_active_experts_.getAvg() << std::endl;
 }
 
 void Profiling::recordMemoryUsage()

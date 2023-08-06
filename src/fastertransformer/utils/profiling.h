@@ -45,6 +45,7 @@ public:
     void activeExperts(int num_active_experts)
     {
         max_num_active_experts_ = std::max(num_active_experts, max_num_active_experts_);
+        average_num_active_experts_.update(num_active_experts);
     }
 
 private:
@@ -57,6 +58,8 @@ private:
 
     std::vector<size_t> memory_usages_;
     int max_num_active_experts_;
+
+    AverageMeter<int> average_num_active_experts_;
 
     Profiling() {
         events_.resize(NUM_EVENT_TYPE);

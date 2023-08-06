@@ -123,6 +123,7 @@ def split_and_convert_process(key, val, factor, saved_dir):
             key.find("SelfAttention.o.weight") != -1
             or key.find("EncDecAttention.o.weight") != -1
             or key.find("DenseReluDense.wo.weight") != -1
+            or key.find("mlp.wo.weight") != -1
             or re.search(r"mlp.experts.expert_\d+.wo.weight", key) is not None
     ):
         split_vals = np.split(val, factor, axis=0)
@@ -132,6 +133,8 @@ def split_and_convert_process(key, val, factor, saved_dir):
 
     elif (
             key.find("DenseReluDense.wi.weight") != -1
+            or key.find("mlp.wi.weight") != -1
+            or key.find("mlp.router.classifier.weight") != -1
             or re.search(r"mlp.experts.expert_\d+.wi.weight", key) is not None
             or (key.find("encoder") != -1 and (
             key.find("SelfAttention.q.weight") != -1

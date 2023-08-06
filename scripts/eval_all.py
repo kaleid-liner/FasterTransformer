@@ -37,13 +37,19 @@ def parse_output(output: str):
         if m:
             max_active_experts = int(m[1])
             break
+
+    cache_hit_rate = 0
+    for line in output.splitlines():
+        m = re.search(r"Average cache hit rate: ([\d\.]+)", line)
+        if m:
+            cache_hit_rate = float(m[1])
     
-    return block_lat, throughput, peak_mem_encoder, peak_mem_decoder, max_active_experts
+    return block_lat, throughput, peak_mem_encoder, peak_mem_decoder, max_active_experts, cache_hit_rate
 
 
-def profile_config(cpp_config, model, method, batch_size):
+def profile_config(cpp_config, model, method, batch_size, forced_num_expert=0, cache_ratio=0, disk_offload=0):
     iterations = 4
-    exp_name = f"{model}_{method}_{batch_size}"
+    exp_name = f"{model}_{method}_{batch_size}_{forced_num_expert}_{cache_ratio}_{disk_offload}"
     print(f"Running {exp_name}")
     if method == "GPU-only":
         encoder_fetcher_mode = "0"
@@ -59,20 +65,36 @@ def profile_config(cpp_config, model, method, batch_size):
         decoder_fetcher_mode = "2"
         iterations = 1
 
+    if "base" in model:
+        size_per_expert = 18874368
+        num_layer = 6
+    elif "large" in model:
+        size_per_expert = 33554432
+        num_layer = 12
+
+    total_experts = int(re.search(r"\d+", model)[0])
+
+    arena_size = 21474836480
+    use_cache = 0
+    if cache_ratio != 0:
+        use_cache = 1
+        arena_size = max(round(num_layer * total_experts * cache_ratio), 1)
+        arena_size = arena_size * size_per_expert
+
     cpp_config["default"] = {
-        "arena_size": "21474836480",
+        "arena_size": f"{arena_size}",
         "encoder_fetcher_mode": encoder_fetcher_mode,
         "decoder_fetcher_mode": decoder_fetcher_mode,
         "profiling": "1",
         "detailed_timing": "0",
-        "offload_path": "/data/ft/{}/".format(model),
-        "disk_offload": "0",
+        "offload_path": f"/data/ft/{model}/",
+        "disk_offload": f"{disk_offload}",
         "load_from_cpp": "1",
-        "use_cache": "0",
+        "use_cache": f"{use_cache}",
         "quant_mode": "0",
         "vocab_size": "32128",
-        "fetch_all": str(int(method == "SE-MoE")),
-        "forced_num_experts": "0",
+        "fetch_all": f"{int(method == 'SE-MoE')}",
+        "forced_num_experts": f"{forced_num_expert}",
     }
 
     with open("/workspace/FasterTransformer/cpp_config.ini", "w") as fp:
@@ -106,22 +128,14 @@ def profile_config(cpp_config, model, method, batch_size):
     with open(f"/workspace/FasterTransformer/logs/{exp_name}.log", "w") as fp:
         fp.write(result.stdout)
 
-    block_lat, throughput, peak_mem_encoder, peak_mem_decoder, max_active_experts = parse_output(result.stdout)
-
-    if "base" in model:
-        size_per_expert = 18874368
-    elif "large" in model:
-        size_per_expert = 33554432
-
-    total_experts = int(re.search(r"\d+", model)[0])
-    arena_size = 21474836480
+    block_lat, throughput, peak_mem_encoder, peak_mem_decoder, max_active_experts, cache_hit_rate = parse_output(result.stdout)
 
     if method == "Pre-gated":
         used_buffer = 2 * max_active_experts
     elif method == "DeepSpeed":
         used_buffer = max_active_experts
     elif method == "GPU-only":
-        used_buffer = 0
+        used_buffer = num_layer * total_experts
     elif method == "SE-MoE":
         used_buffer = 2 * total_experts
 
@@ -132,7 +146,8 @@ def profile_config(cpp_config, model, method, batch_size):
         f"peak_mem_encoder: {peak_mem_encoder}, "
         f"peak_mem_decoder: {peak_mem_decoder}, "
         f"max_active_experts: {max_active_experts}, "
-        f"peak_mem: {peak_mem}"
+        f"peak_mem: {peak_mem}, "
+        f"cache_hit_rate: {cache_hit_rate}"
     )
 
     return {
@@ -140,12 +155,15 @@ def profile_config(cpp_config, model, method, batch_size):
         "throughput": throughput,
         "peak_mem": peak_mem,
         "max_active_expert": max_active_experts,
+        "cache_hit_rate": cache_hit_rate,
     }
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--re_run", action="store_true")
+    parser.add_argument("--name", type=str, default="")
+    parser.set_defaults(rerun=False, use_cache=False)
     return parser.parse_args()
 
 
@@ -153,30 +171,54 @@ def main():
     args = parse_args()
 
     models = [
-        "switch-base-8",
+        # "switch-base-8",
         # "switch-base-16",
         # "switch-base-32",
-        "switch-base-64",
+        # "switch-base-64",
         # "switch-base-128",
-        "switch-base-256",
+        # "switch-base-256",
         "switch-large-128",
     ]
     batch_sizes = [
         1,
         # 2,
         # 4,
-        8,
-        16,
+        # 8,
+        # 16,
     ]
     methods = [
         # "GPU-only",
-        "Pre-gated",
-        # "DeepSpeed",
+        # "Pre-gated",
+        "DeepSpeed",
         # "SE-MoE",
     ]
     metrics = [
-        "peak_mem",
-        "max_active_expert",
+        "block_lat",
+        "throughput",
+        # "peak_mem",
+        # "max_active_expert",
+        # "cache_hit_rate",
+    ]
+    forced_num_experts = [
+        0,
+        # 1,
+        # 2,
+        # 4,
+        # 8,
+        # 16,
+    ]
+    cache_ratios = [
+        0,
+        0.01,
+        0.03,
+        0.05,
+        0.1,
+        0.2,
+        0.4,
+        0.8,
+    ]
+    disk_offloads = [
+        1,
     ]
 
     cpp_config = configparser.ConfigParser()
@@ -190,27 +232,53 @@ def main():
 
     results = {}
     for metric in metrics:
-        results[metric] = {"bs": batch_sizes}
+        results[metric] = {
+            "bs": batch_sizes,
+            "active experts": forced_num_experts,
+            "cache ratio": cache_ratios,
+        }
         results[metric].update(hardware_infos)
+
+        for key, value in results[metric].items():
+            if len(value) == 1:
+                results[metric][key] = value * max(len(forced_num_experts), len(batch_sizes), len(cache_ratios))
+
+    def gen_csv_name(metric):
+        return f"{args.name}{'_' if args.name else ''}{metric}s.csv"
 
     if not args.re_run:
         for method in methods:
             for model in models:
-                records = []
+                for disk_offload in disk_offloads:
+                    records = []
 
-                for batch_size in batch_sizes:
-                    records.append(profile_config(cpp_config, model, method, batch_size))
+                    for batch_size in batch_sizes:
+                        for forced_num_expert in forced_num_experts:
+                            for cache_ratio in cache_ratios:
+                                records.append(
+                                    profile_config(
+                                        cpp_config,
+                                        model,
+                                        method,
+                                        batch_size,
+                                        forced_num_expert,
+                                        cache_ratio,
+                                        disk_offload,
+                                    )
+                                )
 
-                for metric, result in results.items():
-                    result["{}/{}".format(model, method)] = [record[metric] for record in records]
+                    for metric, result in results.items():
+                        result[f"{model}/{method}/{'SSD' if disk_offload else 'CPU'}"] = [
+                            record[metric] for record in records
+                        ]
 
-                # Generate CSV after each model and method runned
-                for metric, result in results.items():
-                    df = pd.DataFrame.from_dict(result)
-                    df.to_csv(f"{metric}s.csv", index=False)
+                    # Generate CSV after each model and method runned
+                    for metric, result in results.items():
+                        df = pd.DataFrame.from_dict(result)
+                        df.to_csv(f"{gen_csv_name(metric)}", index=False)
 
     else:
-        dfs = {metric: pd.read_csv(f"/workspace/FasterTransformer/performance_data/{metric}s.csv") for metric in metrics}
+        dfs = {metric: pd.read_csv(f"/workspace/FasterTransformer/performance_data/{gen_csv_name(metric)}") for metric in metrics}
         models = [
             "switch-base-8",
             # "switch-base-16",
@@ -231,7 +299,7 @@ def main():
             "GPU-only",
             "Pre-gated",
             "DeepSpeed",
-            "SE-MoE",
+            # "SE-MoE",
         ]
         rerun_configs = [
             (model, method, batch_size)
@@ -245,7 +313,7 @@ def main():
             record = profile_config(cpp_config, model, method, batch_size)
             for metric, df in dfs.items():
                 df.loc[row_idx, col_idx] = record[metric]
-                df.to_csv(f"{metric}s.csv", index=False)
+                df.to_csv(f"{gen_csv_name(metric)}", index=False)
 
 
 if __name__ == "__main__":
