@@ -23,7 +23,22 @@ def parse_output(output: str):
             throughput = int(m[1])
             break
     
-    return block_lat, throughput
+    peak_mem_encoder = peak_mem_decoder = 0
+    for line in output.splitlines():
+        m = re.search(r"MEM usage: (\d+) (\d+)", line)
+        if m:
+            peak_mem_encoder = int(m[1])
+            peak_mem_decoder = int(m[2])
+            break
+
+    max_active_experts = 0
+    for line in output.splitlines():
+        m = re.search(r"Max active experts: (\d+)", line)
+        if m:
+            max_active_experts = int(m[1])
+            break
+    
+    return block_lat, throughput, peak_mem_encoder, peak_mem_decoder, max_active_experts
 
 
 def profile_config(cpp_config, model, method, batch_size):
@@ -91,9 +106,41 @@ def profile_config(cpp_config, model, method, batch_size):
     with open(f"/workspace/FasterTransformer/logs/{exp_name}.log", "w") as fp:
         fp.write(result.stdout)
 
-    block_lat, throughput = parse_output(result.stdout)
-    print(f"BLK AVG: {block_lat} ms, throughput: {throughput} tokens/sec")
-    return block_lat, throughput
+    block_lat, throughput, peak_mem_encoder, peak_mem_decoder, max_active_experts = parse_output(result.stdout)
+
+    if "base" in model:
+        size_per_expert = 18874368
+    elif "large" in model:
+        size_per_expert = 33554432
+
+    total_experts = int(re.search(r"\d+", model)[0])
+    arena_size = 21474836480
+
+    if method == "Pre-gated":
+        used_buffer = 2 * max_active_experts
+    elif method == "DeepSpeed":
+        used_buffer = max_active_experts
+    elif method == "GPU-only":
+        used_buffer = 0
+    elif method == "SE-MoE":
+        used_buffer = 2 * total_experts
+
+    peak_mem = peak_mem_decoder - arena_size - size_per_expert * (2 * total_experts - used_buffer)
+    print(
+        f"BLK AVG: {block_lat} ms, "
+        f"throughput: {throughput} tokens/sec, "
+        f"peak_mem_encoder: {peak_mem_encoder}, "
+        f"peak_mem_decoder: {peak_mem_decoder}, "
+        f"max_active_experts: {max_active_experts}, "
+        f"peak_mem: {peak_mem}"
+    )
+
+    return {
+        "block_lat": block_lat,
+        "throughput": throughput,
+        "peak_mem": peak_mem,
+        "max_active_expert": max_active_experts,
+    }
 
 
 def parse_args():
@@ -107,66 +154,71 @@ def main():
 
     models = [
         "switch-base-8",
-        "switch-base-16",
-        "switch-base-32",
+        # "switch-base-16",
+        # "switch-base-32",
         "switch-base-64",
-        "switch-base-128",
+        # "switch-base-128",
         "switch-base-256",
         "switch-large-128",
     ]
     batch_sizes = [
         1,
-        2,
-        4,
+        # 2,
+        # 4,
         8,
         16,
     ]
-    methods = ["GPU-only", "Pre-gated", "DeepSpeed", "SE-MoE"]
+    methods = [
+        # "GPU-only",
+        "Pre-gated",
+        # "DeepSpeed",
+        # "SE-MoE",
+    ]
+    metrics = [
+        "peak_mem",
+        "max_active_expert",
+    ]
 
     cpp_config = configparser.ConfigParser()
     cpp_config.read("/workspace/FasterTransformer/cpp_config.ini")
 
-    block_lats = {"bs": batch_sizes}
-    throughputs = {"bs": batch_sizes}
     hardware_infos = {
         "CPU": [get_cpu_info()["brand_raw"]] * len(batch_sizes),
         "RAM (GB)": [int(psutil.virtual_memory().total / 1024 / 1024 / 1024)] * len(batch_sizes),
         "GPU": [torch.cuda.get_device_name()] * len(batch_sizes),
     }
-    block_lats.update(hardware_infos)
-    throughputs.update(hardware_infos)
+
+    results = {}
+    for metric in metrics:
+        results[metric] = {"bs": batch_sizes}
+        results[metric].update(hardware_infos)
 
     if not args.re_run:
         for method in methods:
             for model in models:
-                _block_lats = []
-                _throughputs = []
+                records = []
 
                 for batch_size in batch_sizes:
-                    block_lat, throughput = profile_config(cpp_config, model, method, batch_size)
-                    _block_lats.append(block_lat)
-                    _throughputs.append(throughput)
+                    records.append(profile_config(cpp_config, model, method, batch_size))
 
-                block_lats["{}/{}".format(model, method)] = _block_lats
-                throughputs["{}/{}".format(model, method)] = _throughputs
+                for metric, result in results.items():
+                    result["{}/{}".format(model, method)] = [record[metric] for record in records]
 
                 # Generate CSV after each model and method runned
-                df = pd.DataFrame.from_dict(block_lats)
-                df.to_csv("block_lats.csv", index=False)
+                for metric, result in results.items():
+                    df = pd.DataFrame.from_dict(result)
+                    df.to_csv(f"{metric}s.csv", index=False)
 
-                df = pd.DataFrame.from_dict(throughputs)
-                df.to_csv("throughputs.csv", index=False)
     else:
-        block_lats_df = pd.read_csv("/workspace/FasterTransformer/performance_data/block_lats.csv")
-        throughputs_df = pd.read_csv("/workspace/FasterTransformer/performance_data/throughputs.csv")
+        dfs = {metric: pd.read_csv(f"/workspace/FasterTransformer/performance_data/{metric}s.csv") for metric in metrics}
         models = [
             "switch-base-8",
-            "switch-base-16",
-            "switch-base-32",
-            "switch-base-64",
-            "switch-base-128",
-            "switch-base-256",
-            "switch-large-128",
+            # "switch-base-16",
+            # "switch-base-32",
+            # "switch-base-64",
+            # "switch-base-128",
+            # "switch-base-256",
+            # "switch-large-128",
         ]
         batch_sizes = [
             1,
@@ -175,7 +227,12 @@ def main():
             8,
             16,
         ]
-        methods = ["Pre-gated", "DeepSpeed"]
+        methods = [
+            "GPU-only",
+            "Pre-gated",
+            "DeepSpeed",
+            "SE-MoE",
+        ]
         rerun_configs = [
             (model, method, batch_size)
             for model in models
@@ -185,11 +242,10 @@ def main():
         for model, method, batch_size in rerun_configs:
             row_idx = batch_sizes.index(batch_size)
             col_idx = "{}/{}".format(model, method)
-            block_lat, throughput = profile_config(cpp_config, model, method, batch_size)
-            block_lats_df.loc[row_idx, col_idx] = block_lat
-            throughputs_df.loc[row_idx, col_idx] = throughput
-            block_lats_df.to_csv("block_lats.csv", index=False)
-            throughputs_df.to_csv("throughputs.csv", index=False)
+            record = profile_config(cpp_config, model, method, batch_size)
+            for metric, df in dfs.items():
+                df.loc[row_idx, col_idx] = record[metric]
+                df.to_csv(f"{metric}s.csv", index=False)
 
 
 if __name__ == "__main__":
