@@ -1,0 +1,4 @@
+bs,CPU,RAM (GB),GPU,switch-base-128/GPU-only,switch-base-128/Pre-gated,switch-base-128/DeepSpeed,switch-base-128/SE-MoE
+1,AMD EPYC 7V12 64-Core Processor,1771,NVIDIA A100-SXM4-80GB,1,1,1,1
+8,AMD EPYC 7V12 64-Core Processor,1771,NVIDIA A100-SXM4-80GB,8,8,8,8
+16,AMD EPYC 7V12 64-Core Processor,1771,NVIDIA A100-SXM4-80GB,15,15,15,15
