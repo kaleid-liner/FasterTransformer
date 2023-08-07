@@ -7,3 +7,5 @@ FT:
 Megatron q_scaling = 1
 
 Leave expert_scales to next iteration
+
+TODO: Router for the first layer: need more works
