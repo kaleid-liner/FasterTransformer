@@ -27,6 +27,15 @@ class ICachePolicy
     virtual void Insert(const Key &key) = 0;
 
     /**
+     * \brief Handle dummy element insertion in a cache
+     * \param[in] key Key that should be used by the policy
+     */
+    virtual void InsertDummy(const Key &key)
+    {
+        Insert(key);
+    }
+
+    /**
      * \brief Handle request to the key-element in a cache
      * \param key
      */

@@ -95,6 +95,7 @@ def profile_config(cpp_config, model, method, batch_size, forced_num_expert=0, c
         "vocab_size": "32128",
         "fetch_all": f"{int(method == 'SE-MoE')}",
         "forced_num_experts": f"{forced_num_expert}",
+        "cache_policy": "LFU",
     }
 
     with open("/workspace/FasterTransformer/cpp_config.ini", "w") as fp:
@@ -208,17 +209,18 @@ def main():
         # 16,
     ]
     cache_ratios = [
-        0,
-        0.01,
-        0.03,
-        0.05,
-        0.1,
-        0.2,
+        # 0,
+        # 0.01,
+        # 0.03,
+        # 0.05,
+        # 0.1,
+        # 0.2,
         0.4,
-        0.8,
+        # 0.8,
     ]
     disk_offloads = [
-        1,
+        0,
+        # 1,
     ]
 
     cpp_config = configparser.ConfigParser()

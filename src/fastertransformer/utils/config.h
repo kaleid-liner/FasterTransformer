@@ -66,6 +66,8 @@ public:
         fetch_all = std::stoi(ini["default"]["fetch_all"]);
 
         forced_num_experts = std::stoi(ini["default"]["forced_num_experts"]);
+
+        cache_policy = ini["default"]["cache_policy"];
     }
 
     void print() const
@@ -83,7 +85,8 @@ public:
                   << "quant_mode: " << int(quant_mode) << std::endl
                   << "vocab_size: " << vocab_size << std::endl
                   << "fetch_all: " << fetch_all << std::endl
-                  << "forced_num_experts: " << forced_num_experts << std::endl;
+                  << "forced_num_experts: " << forced_num_experts << std::endl
+                  << "cache_policy: " << cache_policy << std::endl;
     }
 
 
@@ -109,8 +112,16 @@ public:
     bool fetch_all;  // for SE-MoE
 
     int forced_num_experts;  // If 0, not force number of active experts
+
+    std::string cache_policy;
 private:
-    GlobalConfig() {}
+    GlobalConfig()
+    { 
+        setDefault(); 
+        if (profiling) {
+            print();
+        }
+    }
 };
 
 }

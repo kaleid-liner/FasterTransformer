@@ -6,16 +6,56 @@
 #include <math.h>
 #include "cutlass/array.h"
 #include "cutlass/numeric_types.h"
+#include "cache_policy.h"
+#include "lru_cache_policy.h"
+#include "lfu_cache_policy.h"
 
 namespace fastertransformer {
 
 template class MemoryArena<char>;
 
 template <typename T>
+MemoryArena<T>::MemoryArena(size_t size, size_t chunk_size, cudaStream_t stream) 
+    : chunk_size_(chunk_size), 
+      size_(size),
+      chunk_num_(0),
+      ptr_(nullptr),
+      cache_(nullptr),
+      stream_(stream),
+      offload_buffer_(nullptr),
+      pitch_sizes_(),
+      pool_(nullptr)
+{
+    chunk_num_ = size_ / chunk_size_;
+
+    if (GlobalConfig::instance().cache_policy == "LFU") {
+        cache_ = std::make_shared<cache_t>(chunk_num_, std::make_shared<caches::LFUCachePolicy<tag_t>>());
+    } else if (GlobalConfig::instance().cache_policy == "LRU") {
+        cache_ = std::make_shared<cache_t>(chunk_num_, std::make_shared<caches::LRUCachePolicy<tag_t>>());
+    } else {
+        cache_ = std::make_shared<cache_t>(chunk_num_, std::make_shared<caches::NoCachePolicy<tag_t>>());
+    }
+
+    // Ensure every experts is aligned
+    ptr_ = mallocBuffer(chunk_size_, chunk_num_);
+    // Pre-cache
+    // This is a workaround, currently this process is necessary
+    for (int t = 0; t < chunk_num_; t++) {
+        cache_->PutDummy(std::to_string(t), (T*)((char*)ptr_ + pitch_sizes_[chunk_size_] * t));
+    }
+
+    if (GlobalConfig::instance().disk_offload) {
+        check_cuda_error(cudaMallocHost(&offload_buffer_, chunk_size_ * sizeof(T)));
+    }
+
+    pool_ = std::make_shared<ctpl::thread_pool>(1);
+}
+
+template <typename T>
 std::future<void> MemoryArena<T>::allocate(const tag_t& tag, T* dst, const T* src,
                                            std::function<void(const T*, cudaStream_t)> post_callback)
 {
-    auto repl = cache_->PutKey(tag, nullptr);
+    auto repl = cache_->GetOrPut(tag, nullptr);
     if (GlobalConfig::instance().profiling) {
         Profiling::instance().cacheHit(repl.second);
     }

@@ -83,7 +83,6 @@ FTT5Decoding<T>::FTT5Decoding(int64_t                        head_num,
     int dense_weight_index     = 0;  // the inter and out kernel has the same index
     int moe_dense_weight_index = 0;  // the moe inter and out kernel has the same index
 
-    ft::GlobalConfig::instance().setDefault();
     if (ft::GlobalConfig::instance().load_from_cpp) {
         const std::string& offload_path = ft::GlobalConfig::instance().offload_path;
         bool disk_offload = ft::GlobalConfig::instance().disk_offload;
