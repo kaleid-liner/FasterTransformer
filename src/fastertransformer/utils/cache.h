@@ -97,7 +97,7 @@ class fixed_sized_cache
     {
         operation_guard lock{safe_op};
 
-        if (Size() == max_cache_size) {
+        if (cache_items_map.size() == max_cache_size) {
             return;
         }
 
