@@ -95,7 +95,7 @@ void FetcherContext<ActT, WeightT, BiasT>::fetch(const int* permuted_experts, bo
 
     for(int i = 0; i < _active_experts_count; i++) {
         int expert = (forced_num_experts || fetch_all) ? i : permuted_experts_[i];
-        expert = stdex::randint(0, 127);
+        expert = stdex::randint(0, 31);
 
         const char* fetch_weight_src = prefetch ? next_weight_src_ : current_weight_src_;
         std::string layer_name = prefetch ? next_layer_name_ : current_layer_name_;
