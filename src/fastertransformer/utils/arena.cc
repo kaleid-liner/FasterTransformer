@@ -9,6 +9,7 @@
 #include "cache_policy.h"
 #include "lru_cache_policy.h"
 #include "lfu_cache_policy.h"
+#include "lifo_cache_policy.h"
 
 namespace fastertransformer {
 
@@ -32,6 +33,8 @@ MemoryArena<T>::MemoryArena(size_t size, size_t chunk_size, cudaStream_t stream)
         cache_ = std::make_shared<cache_t>(chunk_num_, std::make_shared<caches::LFUCachePolicy<tag_t>>());
     } else if (GlobalConfig::instance().cache_policy == "LRU") {
         cache_ = std::make_shared<cache_t>(chunk_num_, std::make_shared<caches::LRUCachePolicy<tag_t>>());
+    } else if (GlobalConfig::instance().cache_policy == "LIFO") {
+        cache_ = std::make_shared<cache_t>(chunk_num_, std::make_shared<caches::LIFOCachePolicy<tag_t>>());
     } else {
         cache_ = std::make_shared<cache_t>(chunk_num_, std::make_shared<caches::NoCachePolicy<tag_t>>());
     }

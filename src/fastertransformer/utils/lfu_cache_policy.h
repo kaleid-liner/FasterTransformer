@@ -43,20 +43,20 @@ class LFUCachePolicy : public ICachePolicy<Key>
                 Reset(n.first);
             }
         }
-        cache_name = key;
         constexpr std::size_t INIT_VAL = 1;
         // all new value initialized with the frequency 1
         lfu_storage[key] =
             frequency_storage.emplace_hint(frequency_storage.cend(), INIT_VAL, key);
+        cache_name = key;
     }
 
     void InsertDummy(const Key &key) override
     {
-        cache_name = key;
         constexpr std::size_t INIT_VAL = 0;
         // all new value initialized with the frequency 1
         lfu_storage[key] =
             frequency_storage.emplace_hint(frequency_storage.cbegin(), INIT_VAL, key);
+        cache_name = key;
     }
 
     void Touch(const Key &key) override
