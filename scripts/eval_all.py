@@ -172,12 +172,12 @@ def main():
     args = parse_args()
 
     models = [
-        # "switch-base-8",
-        # "switch-base-16",
-        # "switch-base-32",
-        # "switch-base-64",
-        # "switch-base-128",
-        # "switch-base-256",
+        "switch-base-8",
+        "switch-base-16",
+        "switch-base-32",
+        "switch-base-64",
+        "switch-base-128",
+        "switch-base-256",
         "switch-large-128",
     ]
     batch_sizes = [
@@ -188,15 +188,15 @@ def main():
         # 16,
     ]
     methods = [
-        # "GPU-only",
-        # "Pre-gated",
+        "GPU-only",
+        "Pre-gated",
         "DeepSpeed",
-        # "SE-MoE",
+        "SE-MoE",
     ]
     metrics = [
         "block_lat",
         "throughput",
-        # "peak_mem",
+        "peak_mem",
         # "max_active_expert",
         # "cache_hit_rate",
     ]
@@ -209,13 +209,13 @@ def main():
         # 16,
     ]
     cache_ratios = [
-        # 0,
+        0,
         # 0.01,
         # 0.03,
         # 0.05,
         # 0.1,
         # 0.2,
-        0.4,
+        # 0.4,
         # 0.8,
     ]
     disk_offloads = [
