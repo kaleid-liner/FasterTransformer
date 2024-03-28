@@ -13,4 +13,5 @@
 	url = https://github.com/jeonsworld/ViT-pytorch
 [submodule "3rdparty/cutlass"]
 	path = 3rdparty/cutlass
-	url = git@github.com:kaleid-liner/cutlass.git
+	url = https://github.com/kaleid-liner/cutlass.git
+	branch = fp4_dev
